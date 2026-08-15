@@ -1446,6 +1446,8 @@ const VoxelCityScene: React.FC<{
             
             // Building Bounce Distortion Logic
             animRef.current.buildingsList.forEach((b) => { 
+                // un bâtiment remplacé par sa silhouette n'a rien à animer
+                if (!b.visible) return;
                 // Expansion click logic
                 const e = b.userData.expanded; 
                 const es = 3; 
