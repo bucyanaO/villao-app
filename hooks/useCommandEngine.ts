@@ -7,6 +7,8 @@
 import { useState } from 'react';
 import { GoogleGenAI } from "@google/genai";
 import { parseLocalCommand } from '../lib/commandParser';
+import { callAgent } from '../lib/agentGateway';
+import { CITY_PERSONA } from '../engine/agents/personas';
 
 export interface ChatMessage { role: 'user' | 'system'; text: string; action?: string }
 
@@ -93,9 +95,15 @@ export function useCommandEngine(opts: CommandEngineOptions): CommandEngine {
     // --- 2. FALLBACK: Gemini AI (only if a real key is configured) ---
     const key = process.env.API_KEY;
     if (!key || key === 'PLACEHOLDER_API_KEY' || key.length < 10) {
+      // No Gemini key: answer free-form questions through the VPS gateway (Gemma) instead of "commande non reconnue".
       pushChat('user', prompt);
-      pushChat('system', "Commande non reconnue localement. Essaie « commande une voiture », « appelle un taxi », « fait pleuvoir »... Pour l'IA complète, ajoute une vraie clé Gemini dans .env.local.", "INCONNU");
       setScenarioPrompt("");
+      try {
+        const reply = await callAgent({ persona: CITY_PERSONA, messages: [{ role: 'user', content: prompt }], telemetry: opts.getTelemetry() as any });
+        pushChat('system', reply, 'IA');
+      } catch (e) {
+        pushChat('system', 'Erreur de connexion au modèle. Vérifie la passerelle VPS.', 'ERREUR');
+      }
       return;
     }
 

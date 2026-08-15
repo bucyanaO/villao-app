@@ -2,7 +2,7 @@
 # (VITE_AGENT_ENDPOINT is baked at build time via ARG).
 FROM node:20-alpine AS build
 WORKDIR /app
-ARG VITE_AGENT_ENDPOINT=http://villao-gateway.miha.run/api/agent/chat
+ARG VITE_AGENT_ENDPOINT=https://villao-gateway.miha.run/api/agent/chat
 ENV VITE_AGENT_ENDPOINT=$VITE_AGENT_ENDPOINT
 COPY package.json package-lock.json* ./
 RUN npm install
