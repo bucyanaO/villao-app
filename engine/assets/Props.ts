@@ -145,27 +145,36 @@ export const Props = {
             
             g.add(foliage);
             currentY += size * 0.6;
-            
-            // Inner Core (Glowing)
-            const core = createSolidObject(size * 0.3, size * 0.3, size * 0.3, sharedMaterials.eyeGlow, isCube ? 'box' : 'icosahedron');
-            core.position.copy(foliage.position);
-            g.add(core);
+
+            // Coeur lumineux : seulement sur la couronne, pas à chaque étage.
+            if (i === layers - 1) {
+                const core = createSolidObject(size * 0.3, size * 0.3, size * 0.3, sharedMaterials.eyeGlow, isCube ? 'box' : 'icosahedron');
+                core.position.copy(foliage.position);
+                g.add(core);
+            }
         }
-        
-        // Floating particles (Data Leaves)
+
+        // Feuilles de données : une seule instance pour tout l'arbre. En meshes
+        // séparés, un alignement d'arbres pesait à lui seul des milliers
+        // d'appels de dessin.
+        const pCount = Math.max(2, Math.floor(3 * scale));
         const pSize = 0.15 * scale;
-        const pCount = Math.floor(4 * scale); 
-        for(let i=0; i<pCount; i++) {
-             const p = createSolidObject(pSize, pSize, pSize, getMaterial(foliageColor, false), 'box');
-             p.position.set(
-                 (Math.random()-0.5) * scale * 2.5, 
-                 trunkH + Math.random() * scale * 3, 
-                 (Math.random()-0.5) * scale * 2.5
-             );
-             // Floating animation would be handled in main loop, for now static
-             g.add(p);
+        const pGeo = new THREE.BoxGeometry(pSize, pSize, pSize);
+        const leaves = new THREE.InstancedMesh(pGeo, getMaterial(foliageColor, false), pCount);
+        const dummy = new THREE.Object3D();
+        for (let i = 0; i < pCount; i++) {
+            dummy.position.set(
+                (Math.random() - 0.5) * scale * 2.5,
+                trunkH + Math.random() * scale * 3,
+                (Math.random() - 0.5) * scale * 2.5,
+            );
+            dummy.rotation.set(0, Math.random() * Math.PI, 0);
+            dummy.updateMatrix();
+            leaves.setMatrixAt(i, dummy.matrix);
         }
-        
+        leaves.instanceMatrix.needsUpdate = true;
+        g.add(leaves);
+
         return g;
     },
     createHoloStatue: (): THREE.Group => {
