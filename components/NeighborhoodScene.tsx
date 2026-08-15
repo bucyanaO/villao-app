@@ -34,6 +34,8 @@ import { createExpansionManager } from '../engine/world/expansion';
 import type { ExpansionManager } from '../engine/world/expansion';
 import { createStudio } from '../engine/agents/studio';
 import { createCitizenLife } from '../engine/agents/citizens';
+import { createTraffic } from '../engine/agents/traffic';
+import type { Traffic } from '../engine/agents/traffic';
 import type { CitizenLife } from '../engine/agents/citizens';
 import { updateLod } from '../engine/world/lod';
 import { createTerrain } from '../engine/world/terrain';
@@ -41,7 +43,7 @@ import type { Terrain } from '../engine/world/terrain';
 import { save as saveLedger, acts as ledgerActs } from '../engine/world/ledger';
 import { createHaze } from '../engine/world/haze';
 import type { Haze } from '../engine/world/haze';
-import type { Studio, StudioEvent, Architect } from '../engine/agents/studio';
+import type { Studio, StudioEvent, Architect, CityReport } from '../engine/agents/studio';
 
 const VoxelCityScene: React.FC<{ 
     lightingPreset?: number, 
@@ -55,7 +57,7 @@ const VoxelCityScene: React.FC<{
     setIsDriving?: (isDriving: boolean) => void,
     onTalkToAgent?: (persona: Persona) => void,
     /** Journal du cabinet d'architectes (constructions, promotions, rues ouvertes) */
-    onStudioEvent?: (e: StudioEvent, roster?: Architect[]) => void,
+    onStudioEvent?: (e: StudioEvent, roster?: Architect[], report?: CityReport) => void,
     /** Télémétrie de tenue en charge (activée par ?stats=1) */
     onStats?: (s: { fps: number; draws: number; tris: number; buildings: number; acts: number; frontier: number; tiles: number }) => void
 }> = ({
@@ -120,6 +122,8 @@ const VoxelCityScene: React.FC<{
     const terrainRef = useRef<Terrain | null>(null);
     // Les citoyens qui vivent leur journée (engine/agents/citizens.ts)
     const citizensRef = useRef<CitizenLife | null>(null);
+    // La circulation sur le réseau réel (engine/agents/traffic.ts)
+    const trafficRef = useRef<Traffic | null>(null);
     const hazeRef = useRef<Haze | null>(null);
     const terrainClockRef = useRef(0);
     const statsRef = useRef({ clock: 0, frames: 0 });
@@ -298,6 +302,7 @@ const VoxelCityScene: React.FC<{
         // Monde sans bord : le sol et la forêt sont engendrés autour du joueur,
         // et la brume volumétrique dissout la frontière de génération.
         citizensRef.current = createCitizenLife(scene);
+        trafficRef.current = createTraffic(scene);
         terrainRef.current = createTerrain(scene);
         terrainRef.current.update({ x: camera.position.x, z: camera.position.z });
         hazeRef.current = createHaze(scene);
@@ -555,6 +560,7 @@ const VoxelCityScene: React.FC<{
                     ? cameraRef.current.position
                     : (controlsRef.current ? controlsRef.current.target : cameraRef.current.position);
                 citizensRef.current.update(d, time, p as THREE.Vector3);
+                trafficRef.current?.update(d, p as THREE.Vector3);
             }
 
             // --- NIVEAU DE DÉTAIL : au loin, les bâtiments deviennent silhouettes ---
@@ -1452,6 +1458,7 @@ const VoxelCityScene: React.FC<{
             studioRef.current?.stop();
             saveLedger();
             citizensRef.current?.dispose();
+            trafficRef.current?.dispose();
             terrainRef.current?.dispose();
             hazeRef.current?.dispose();
             if (requestRef.current) cancelAnimationFrame(requestRef.current);
@@ -1476,9 +1483,11 @@ const VoxelCityScene: React.FC<{
             fogRef.current.color.setHex(p.fog);
             // plancher de densité : le brouillard doit toujours masquer la
             // frontière de génération (~430 m), sinon on verrait le monde apparaître
-            fogRef.current.density = Math.max(0.0085, p.dens * fogLevel);
+            // la nuit, on desserre un peu la brume : sinon la ville éclairée
+            // disparaît avant même qu'on la voie
+            fogRef.current.density = Math.max(0.0085, p.dens * fogLevel * (p.night ? 0.72 : 1));
         }
-        hazeRef.current?.tune(p.fog, Math.max(0.0085, p.dens * fogLevel), p.night);
+        hazeRef.current?.tune(p.fog, Math.max(0.0085, p.dens * fogLevel * (p.night ? 0.72 : 1)), p.night);
         if (ambientLightRef.current) ambientLightRef.current.intensity = p.amb;
         if (dirLightRef.current) { dirLightRef.current.intensity = p.dir; dirLightRef.current.color.setHex(p.dirC); }
         if (skyMaterialRef.current) {
@@ -1601,7 +1610,7 @@ const VoxelCityScene: React.FC<{
                     : (controlsRef.current?.target ?? new THREE.Vector3())),
                 onEvent: (e) => {
                     console.info(`[atelier] ${e.text}`);
-                    onStudioEvent?.(e, studioRef.current?.roster());
+                    onStudioEvent?.(e, studioRef.current?.roster(), studioRef.current?.report());
                 },
             });
             studioRef.current.start();

@@ -19,7 +19,7 @@ import SettingsPanel from './components/ui/SettingsPanel';
 import AudioElements from './components/ui/AudioElements';
 import AgentChat from './components/ui/AgentChat';
 import StudioPanel from './components/ui/StudioPanel';
-import type { StudioEvent, Architect } from './engine/agents/studio';
+import type { StudioEvent, Architect, CityReport } from './engine/agents/studio';
 import type { Persona } from './engine/agents/types';
 
 /**
@@ -64,9 +64,11 @@ const App: FC = () => {
   const [studioRoster, setStudioRoster] = useState<Architect[]>([]);
   const showStats = q.get('stats') === '1';
   const [stats, setStats] = useState<{ fps: number; draws: number; tris: number; buildings: number; acts: number; frontier: number; tiles: number } | null>(null);
-  const onStudioEvent = (e: StudioEvent, roster?: Architect[]) => {
+  const [cityReport, setCityReport] = useState<CityReport | null>(null);
+  const onStudioEvent = (e: StudioEvent, roster?: Architect[], report?: CityReport) => {
     setStudioEvents((prev) => [...prev.slice(-40), e]);
     if (roster) setStudioRoster(roster.map((a) => ({ ...a })));
+    if (report) setCityReport(report);
   };
 
   // --- Feature hooks ---
@@ -154,7 +156,7 @@ const App: FC = () => {
       )}
 
       {/* Ce que les agents sont en train de bâtir */}
-      <StudioPanel events={studioEvents} roster={studioRoster} />
+      <StudioPanel events={studioEvents} roster={studioRoster} report={cityReport} />
 
       {/* HUDs */}
       {walkMode && interactionLabel && !isDriving && (

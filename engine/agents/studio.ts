@@ -105,6 +105,7 @@ const EMPLOYERS: ProgramKind[] = ['magasin', 'boulangerie', 'cafe', 'atelier', '
 export interface CityReport {
   population: number;
   jobs: number;
+  /** Ce qui manque, du plus criant au moins urgent. */
   needs: { kind: ProgramKind; missing: number }[];
 }
 
