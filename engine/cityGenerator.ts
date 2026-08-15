@@ -270,6 +270,48 @@ export const generateCity = (ctx: CityGenCtx) => {
         park.droplets.forEach(d => ctx.animRef.current.fountainDropletsList.push(d));
         park.benchData.forEach(bd => { const m = bd.mat.clone(); const pos = new THREE.Vector3(); const rot = new THREE.Quaternion(); const scl = new THREE.Vector3(); m.decompose(pos, rot, scl); pos.multiplyScalar(1.5); m.compose(pos, rot, scl); propData.benches.push({mat: m}); });
 
+    } else if (architecturalStyle === 'region') {
+        // === REGION: several towns on one map, connected by a road network ===
+        const towns = [ { x: 0, z: 0 }, { x: 95, z: 25 }, { x: -82, z: 72 } ];
+        const roadW = 9;
+        const drawRoad = (a: { x: number; z: number }, b: { x: number; z: number }) => {
+            const dx = b.x - a.x, dz = b.z - a.z; const len = Math.hypot(dx, dz); const ang = Math.atan2(dx, dz);
+            const mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2;
+            const m = new THREE.Matrix4(); m.makeRotationY(ang); m.setPosition(mx, 0.02, mz);
+            asphaltMerger.addBox(m, roadW, 0.05, len);
+            const dashLen = 2, gapLen = 2, n = Math.floor(len / (dashLen + gapLen));
+            for (let k = 0; k < n; k++) {
+                const t = -len / 2 + (dashLen + gapLen) / 2 + k * (dashLen + gapLen);
+                const dm = new THREE.Matrix4(); dm.makeRotationY(ang); dm.setPosition(mx + Math.sin(ang) * t, 0.03, mz + Math.cos(ang) * t);
+                markingMerger.addBox(dm, 0.2, 0.05, dashLen);
+            }
+        };
+        // road network connecting every pair of towns
+        drawRoad(towns[0], towns[1]); drawRoad(towns[0], towns[2]); drawRoad(towns[1], towns[2]);
+        const wallColors = CITY_THEME.colors.buildings.walls;
+        const styles = ['modern', 'cyberpunk', 'brutalist'] as const;
+        towns.forEach((t, ti) => {
+            // central plaza
+            const pm = new THREE.Matrix4(); pm.setPosition(t.x, 0.04, t.z); sidewalkMerger.addBox(pm, 32, 0.05, 32);
+            // 4 procedural buildings around the plaza (with lit windows)
+            for (let i = 0; i < 4; i++) {
+                const ang = i * Math.PI / 2 + ti * 0.3;
+                const bx = t.x + Math.cos(ang) * 26, bz = t.z + Math.sin(ang) * 26;
+                const floors = 2 + Math.floor(Math.random() * 4);
+                const wc = wallColors[Math.floor(Math.random() * wallColors.length)];
+                const bd = CityAssets.Layouts.createProceduralBuilding(11, 11, floors, styles[Math.floor(Math.random() * 3)], wc);
+                bd.group.position.set(bx, 0, bz); bd.group.rotation.y = ang + Math.PI;
+                bd.group.userData = { isBuilding: true, expanded: false };
+                cityGroup.add(bd.group); ctx.animRef.current.buildingsList.push(bd.group);
+                bd.animatedObjects.fans.forEach((f: any) => ctx.animRef.current.fanList.push(f));
+                bd.animatedObjects.screens.forEach((s: any) => ctx.animRef.current.screenList.push(s));
+                bd.inhabitants.forEach((inh: any) => ctx.animRef.current.inhabitantsList.push(inh));
+                // a tree beside each building
+                const tree = CityAssets.Props.createHolographicTree(1 + Math.random(), CITY_THEME.colors.props.greenFoliage);
+                tree.position.set(bx + 9, 0, bz + 9); cityGroup.add(tree);
+            }
+            ctx.animRef.current.pois.push(new THREE.Vector3(t.x, 1, t.z));
+        });
     } else {
         const batchTrafficLightStructure = (x: number, z: number, axis: 'x' | 'z') => {
             const pObj = new THREE.Object3D(); pObj.position.set(x, 2.25, z); pObj.scale.set(0.2, 4.5, 0.2); pObj.updateMatrix(); propData.tlPoles.push({ mat: pObj.matrix.clone() });

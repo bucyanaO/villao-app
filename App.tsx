@@ -74,6 +74,7 @@ const App: FC = () => {
     { id: 'brutalist', name: 'Brutalisme', desc: 'Blocs massifs et décalés.' },
     { id: 'art_deco', name: 'Art Déco', desc: 'Structures en gradins.' },
     { id: 'cyberpunk', name: 'Néo-Futurisme', desc: 'Tours cylindriques et torsadées.' },
+    { id: 'region', name: 'Région (villes+routes)', desc: 'Plusieurs villes reliées par un réseau routier.' },
   ], []);
 
   const handleLightingChange = (index: number) => {
