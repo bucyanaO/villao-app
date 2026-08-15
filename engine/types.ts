@@ -36,6 +36,13 @@ export interface AICommand {
         gravity: number;        // 1.0 = normal, 0.0 = float, -1.0 = invert
     };
     godOperations?: GodOperation[]; // List of specific object manipulations
+    /** Ordres au monde vivant : ouvrir un chantier, se rendre quelque part. */
+    world?: {
+        /** programme à faire construire par le cabinet d'architectes */
+        commission?: string;
+        /** déplacement immédiat de la caméra */
+        goto?: 'district' | 'centre';
+    };
     specialEffects?: {
         flood?: boolean;
         alienInvasion?: boolean;

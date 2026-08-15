@@ -7,6 +7,8 @@ export type SummonType = 'car' | 'taxi' | 'truck' | 'bus';
 export interface ParsedCommand {
     thought: string;
     action: string;
+    /** Ordres adressés au monde vivant (cabinet d'architectes, déplacement). */
+    world?: { commission?: string; goto?: 'district' | 'centre' };
     settings?: {
         lightingPreset?: number;
         weather?: 'clear' | 'rain' | 'snow';
@@ -72,9 +74,65 @@ const LIGHTING_RULES: { preset: number; triggers: string[]; thought: string }[] 
     { preset: 2, triggers: ['nuit', 'neon', 'nocturne', 'minuit', 'nuit noire'], thought: "La nuit tombe. Les néons s'illuminent." },
 ];
 
+/** « construis une école » → le cabinet d'architectes ouvre ce chantier. */
+const PROGRAM_TRIGGERS: { kind: string; label: string; triggers: string[] }[] = [
+    { kind: 'ecole', label: 'une école', triggers: ['ecole', 'college'] },
+    { kind: 'universite', label: 'une université', triggers: ['universite', 'fac', 'campus'] },
+    { kind: 'clinique', label: 'une clinique', triggers: ['clinique', 'hopital', 'dispensaire'] },
+    { kind: 'boulangerie', label: 'une boulangerie', triggers: ['boulangerie', 'boulanger', 'pain'] },
+    { kind: 'cafe', label: 'un café', triggers: ['cafe', 'bistrot', 'bar', 'restaurant'] },
+    { kind: 'magasin', label: 'un magasin', triggers: ['magasin', 'boutique', 'epicerie', 'commerce'] },
+    { kind: 'marche', label: 'un marché', triggers: ['marche couvert', 'halles', 'marche'] },
+    { kind: 'hotel', label: 'un hôtel', triggers: ['hotel'] },
+    { kind: 'banque', label: 'une banque', triggers: ['banque'] },
+    { kind: 'poste', label: 'une poste', triggers: ['poste'] },
+    { kind: 'cinema', label: 'un cinéma', triggers: ['cinema'] },
+    { kind: 'bibliotheque', label: 'une bibliothèque', triggers: ['bibliotheque', 'mediatheque'] },
+    { kind: 'musee', label: 'un musée', triggers: ['musee'] },
+    { kind: 'stade', label: 'un stade', triggers: ['stade'] },
+    { kind: 'mairie', label: 'une mairie', triggers: ['mairie', 'hotel de ville'] },
+    { kind: 'caserne', label: 'une caserne', triggers: ['caserne', 'pompier'] },
+    { kind: 'police', label: 'un commissariat', triggers: ['commissariat', 'police'] },
+    { kind: 'gare', label: 'une gare', triggers: ['gare', 'train'] },
+    { kind: 'usine', label: 'une usine', triggers: ['usine', 'fonderie', 'manufacture'] },
+    { kind: 'entrepot', label: 'un entrepôt', triggers: ['entrepot', 'depot', 'logistique'] },
+    { kind: 'atelier', label: 'un atelier', triggers: ['atelier', 'garage'] },
+    { kind: 'ferme', label: 'une ferme', triggers: ['ferme', 'exploitation agricole'] },
+    { kind: 'energie', label: 'un parc énergétique', triggers: ['solaire', 'eolienne', 'centrale', 'energie'] },
+    { kind: 'telecom', label: 'un relais télécom', triggers: ['antenne', 'telecom', 'relais'] },
+    { kind: 'parc', label: 'un square', triggers: ['parc', 'square', 'jardin public'] },
+    { kind: 'immeuble', label: 'un immeuble', triggers: ['immeuble', 'logements'] },
+    { kind: 'bureau', label: 'une tour de bureaux', triggers: ['bureau', 'tour'] },
+    { kind: 'maison', label: 'une maison', triggers: ['maison', 'pavillon'] },
+];
+
+const BUILD_INTENT = ['construis', 'construit', 'construire', 'batis', 'batir', 'bati', 'edifie', 'monte', 'ajoute', 'installe', 'il faut', 'on a besoin', 'il manque'];
+
 export const parseLocalCommand = (raw: string): ParsedCommand | null => {
     const text = normalize(raw);
     if (!text) return null;
+
+    // --- 0. CHANTIERS & DÉPLACEMENTS (le monde vivant) ---
+    if (has(text, BUILD_INTENT)) {
+        const program = PROGRAM_TRIGGERS.find(r => has(text, r.triggers));
+        if (program) {
+            return {
+                thought: `L'Atelier Villao ouvre le chantier : ${program.label}. Un architecte s'en charge et cherche un terrain conforme.`,
+                action: `COMMISSION_${program.kind.toUpperCase()}`,
+                world: { commission: program.kind },
+            };
+        }
+    }
+    if (has(text, ['nouveau quartier', 'dernier quartier', 'emmene moi au quartier', 'va au quartier', 'montre moi le quartier'])) {
+        return {
+            thought: "Cap sur le dernier quartier sorti de terre.",
+            action: 'GOTO_DISTRICT',
+            world: { goto: 'district' },
+        };
+    }
+    if (has(text, ['centre ville', 'retour au centre', 'ramene moi au centre', 'va au centre'])) {
+        return { thought: "Retour au centre-ville.", action: 'GOTO_CENTRE', world: { goto: 'centre' } };
+    }
 
     // --- 1. SUMMON A VEHICLE ("commande une voiture" / "appelle un taxi") ---
     // Only trigger as a summon when there's an arrival intent OR the phrase is just the vehicle name.

@@ -42,7 +42,7 @@ import { sampleMap } from '../engine/world/minimap';
 import type { MapSample } from '../engine/world/minimap';
 import { createTerrain } from '../engine/world/terrain';
 import type { Terrain } from '../engine/world/terrain';
-import { save as saveLedger, acts as ledgerActs } from '../engine/world/ledger';
+import { save as saveLedger, acts as ledgerActs, districts as ledgerDistricts } from '../engine/world/ledger';
 import { createHaze } from '../engine/world/haze';
 import type { Haze } from '../engine/world/haze';
 import type { Studio, StudioEvent, Architect, CityReport } from '../engine/agents/studio';
@@ -231,6 +231,24 @@ const VoxelCityScene: React.FC<{
             // God Mode Operations (Execute Once)
             if (aiCommand.godOperations && aiCommand.godOperations.length > 0) {
                 executeGodOperations(aiCommand.godOperations, { worldRef: expansionRef, cityGroupRef, cameraRef, controlsRef, aiBuildingsRef, animRef } satisfies GodOpsCtx);
+            }
+
+            // --- ORDRES AU MONDE VIVANT (chantier, déplacement) ---
+            if (aiCommand.world) {
+                const w = aiCommand.world as { commission?: string; goto?: 'district' | 'centre' };
+                if (w.commission) studioRef.current?.commission(w.commission as any);
+                if (w.goto) {
+                    const ds = ledgerDistricts();
+                    const target = w.goto === 'district' && ds.length
+                        ? { x: ds[ds.length - 1].x, z: ds[ds.length - 1].z }
+                        : { x: 0, z: 0 };
+                    if (cameraRef.current) {
+                        cameraRef.current.position.set(target.x + 40, walkModeRef.current ? 1.7 : 45, target.z + 60);
+                        if (walkModeRef.current) cameraRef.current.position.set(target.x, 1.7, target.z + 30);
+                        cameraRef.current.lookAt(target.x, 2, target.z);
+                    }
+                    if (controlsRef.current) { controlsRef.current.target.set(target.x, 2, target.z); controlsRef.current.update(); }
+                }
             }
 
             // Summon a vehicle that drives to the player, then waits to be entered (F).

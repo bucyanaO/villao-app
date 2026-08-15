@@ -22,6 +22,7 @@ import StudioPanel from './components/ui/StudioPanel';
 import MiniMap from './components/ui/MiniMap';
 import type { StudioEvent, Architect, CityReport } from './engine/agents/studio';
 import type { MapSample } from './engine/world/minimap';
+import { PROGRAM_LABEL } from './engine/world/programs';
 import type { Persona } from './engine/agents/types';
 
 /**
@@ -127,6 +128,9 @@ const App: FC = () => {
       isDriving,
       isWalking: walkMode,
       fogLevel,
+      population: cityReport?.population,
+      jobs: cityReport?.jobs,
+      needs: cityReport?.needs.slice(0, 4).map((n) => PROGRAM_LABEL[n.kind]),
     }),
     onCinematicStart: () => { closeAllMenus(); setShowControls(false); },
     onCinematicEnd: () => { setShowControls(true); },

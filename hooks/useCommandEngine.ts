@@ -20,6 +20,10 @@ export interface CommandTelemetry {
   isDriving: boolean;
   isWalking: boolean;
   fogLevel: number;
+  /** État de la ville vivante (population, emplois, manques). */
+  population?: number;
+  jobs?: number;
+  needs?: string[];
 }
 
 export interface CommandEngineOptions {
@@ -72,6 +76,7 @@ export function useCommandEngine(opts: CommandEngineOptions): CommandEngine {
       specialEffects: result.settings?.specialEffects || {},
       godOperations: result.godOperations || [],
       summon: result.summon || null,
+      world: result.world || null,
     });
   };
 
@@ -81,6 +86,26 @@ export function useCommandEngine(opts: CommandEngineOptions): CommandEngine {
   const runCommand = async () => {
     const prompt = scenarioPrompt.trim();
     if (!prompt || isAnalyzing) return;
+
+    // --- 0. ÉTAT DE LA VILLE (réponse immédiate, tirée de la télémétrie) ---
+    const asked = prompt.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (/rapport|ou en est la ville|etat de la ville|combien d habitants|population|il manque quoi|que manque/.test(asked)) {
+      const t = opts.getTelemetry();
+      pushChat('user', prompt);
+      setScenarioPrompt("");
+      if (t.population === undefined) {
+        pushChat('system', "Le cabinet n'a pas encore ouvert ses registres — laissez-lui quelques instants.", 'VILLE');
+      } else {
+        const manque = (t.needs ?? []).slice(0, 3).join(', ');
+        pushChat(
+          'system',
+          `${t.population.toLocaleString('fr-FR')} habitants pour ${t.jobs?.toLocaleString('fr-FR')} emplois.` +
+          (manque ? ` Il manque surtout : ${manque}.` : ' Les besoins sont couverts pour l\'instant.'),
+          'VILLE',
+        );
+      }
+      return;
+    }
 
     // --- 1. LOCAL COMMAND ENGINE (offline, instant) ---
     const local = parseLocalCommand(prompt);
