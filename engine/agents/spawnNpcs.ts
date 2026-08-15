@@ -34,11 +34,12 @@ export function spawnAiNpcs(
     npc.userData.isAi = true;
     npc.userData.name = persona.name; // handy for debugging
 
-    // Halo: a small glowing cube floating above the head.
-    const halo = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.25, 0.25), sharedMaterials.eyeGlow);
-    halo.position.y = 2.2;
+    // AI indicator: a glowing diamond (octahedron) above the head — animated (bob + spin) in the loop.
+    const halo = new THREE.Mesh(new THREE.OctahedronGeometry(0.22), sharedMaterials.eyeGlow);
+    halo.position.y = 2.3;
     halo.userData = { isHalo: true };
     npc.add(halo);
+    npc.userData.halo = halo;
 
     cityGroup.add(npc);
     animRef.current.inhabitantsList.push(npc);

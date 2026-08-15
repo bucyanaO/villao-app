@@ -26,6 +26,7 @@ import { executeGodOperations, summonVehicle } from '../engine/godOperations';
 import type { GodOpsCtx } from '../engine/godOperations';
 import { generateCity } from '../engine/cityGenerator';
 import { spawnAiNpcs } from '../engine/agents/spawnNpcs';
+import { drawLotMarkers } from '../engine/agents/lots';
 import { AI_PERSONAS } from '../engine/agents/personas';
 import type { Persona } from '../engine/agents/types';
 import { createAutonomyTicker } from '../engine/agents/autonomy';
@@ -1275,7 +1276,15 @@ const VoxelCityScene: React.FC<{
                 }
             });
 
-            animRef.current.fountainDropletsList.forEach(d => { d.position.add(d.userData.velocity); d.userData.velocity.y -= 0.01; if (d.position.y < 1.5) { d.position.set(0, 2, 0); d.userData.velocity.set((Math.random() - 0.5) * 0.15, 0.25 + Math.random() * 0.1, (Math.random() - 0.5) * 0.15); } });
+            // Animate AI NPC indicators (glowing diamonds bob + spin above their heads)
+            animRef.current.inhabitantsList.forEach((h: any) => {
+                if (h.userData.isAi && h.userData.halo) {
+                    h.userData.halo.position.y = 2.3 + Math.sin(time * 2 + (h.userData.offset || 0)) * 0.15;
+                    h.userData.halo.rotation.y = time * 1.5;
+                    h.userData.halo.rotation.x = Math.sin(time) * 0.3;
+                }
+            });
+                        animRef.current.fountainDropletsList.forEach(d => { d.position.add(d.userData.velocity); d.userData.velocity.y -= 0.01; if (d.position.y < 1.5) { d.position.set(0, 2, 0); d.userData.velocity.set((Math.random() - 0.5) * 0.15, 0.25 + Math.random() * 0.1, (Math.random() - 0.5) * 0.15); } });
             
             // Building Bounce Distortion Logic
             animRef.current.buildingsList.forEach((b) => { 
@@ -1416,6 +1425,7 @@ const VoxelCityScene: React.FC<{
         
         generateCity({ cityGroup: cityGroupRef.current, architecturalStyle, animRef, fxRefs });
         spawnAiNpcs(cityGroupRef.current, animRef, AI_PERSONAS);
+        drawLotMarkers(cityGroupRef.current);
 
     }, [architecturalStyle]);
     
