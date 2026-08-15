@@ -56,6 +56,8 @@ export interface ExpansionManager {
   openStreet(a: { x: number; z: number }, b: { x: number; z: number }, width?: number): void;
   count(): number;
   frontier(): number;
+  /** Recensement des programmes bâtis dans les quartiers (hors registre). */
+  census(): Record<string, number>;
 }
 
 const LOAD_RADIUS = 430;     // au-delà, un acte n'est plus matérialisé…
@@ -317,5 +319,23 @@ export function createExpansionManager(ctx: ExpansionCtx): ExpansionManager {
 
     count: () => ledgerDistricts().length,
     frontier: () => ledgerFrontier(),
+
+    census() {
+      // Les bâtiments d'un quartier ne sont pas des actes individuels (c'est le
+      // quartier qui l'est). Sans ce recensement, le cabinet croirait la ville
+      // vide et bâtirait des équipements pour personne.
+      const out: Record<string, number> = {};
+      const FORM_AS: Record<string, string> = {
+        'F:oldtown': 'maison', 'F:brutal': 'immeuble', 'F:futur': 'bureau', 'F:mega': 'immeuble',
+      };
+      for (const plan of plans.values()) {
+        for (const slot of plan.slots) {
+          if (slot.skip) continue;
+          const kind = FORM_AS[slot.kind as string] ?? (slot.kind as string);
+          out[kind] = (out[kind] ?? 0) + 1;
+        }
+      }
+      return out;
+    },
   };
 }

@@ -207,7 +207,11 @@ export function createStudio(ctx: StudioCtx, opts: StudioOptions = {}): Studio {
 
   /** Photographie de la ville : population, emplois, manques. */
   const survey = (): CityReport => {
+    // Le parc bâti = les ouvrages du registre + ce que contiennent les quartiers.
     const counts = countByKind();
+    for (const [kind, n] of Object.entries(ctx.world.census())) {
+      counts[kind] = (counts[kind] ?? 0) + n;
+    }
     let population = 0;
     let jobs = 0;
     for (const [kind, n] of Object.entries(counts) as [ProgramKind, number][]) {
