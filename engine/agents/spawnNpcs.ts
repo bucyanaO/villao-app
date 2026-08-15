@@ -1,0 +1,41 @@
+/**
+ * spawnAiNpcs — places the AI personas as tagged inhabitants in the city.
+ * Each gets `userData.type = 'ai-agent'` + `userData.persona`, plus a small
+ * glowing "halo" so the player can spot consultants at a distance.
+ *
+ * Call after `generateCity` (which resets the inhabitant list), so the AI NPCs
+ * are registered for the animation loop and re-added on every city regeneration.
+ */
+import type { MutableRefObject } from 'react';
+import * as THREE from 'three';
+import { CityAssets, InhabitantState, sharedMaterials } from '../assets';
+import type { AnimState } from '../context';
+import type { Persona } from './types';
+
+export function spawnAiNpcs(
+  cityGroup: THREE.Group,
+  animRef: MutableRefObject<AnimState>,
+  personas: Persona[],
+): THREE.Group[] {
+  const npcs: THREE.Group[] = [];
+  for (const persona of personas) {
+    const npc = CityAssets.Life.createInhabitant(InhabitantState.IDLE);
+    npc.position.set(persona.location.x, 0.2, persona.location.z);
+    npc.rotation.y = Math.random() * Math.PI * 2;
+    npc.userData.type = 'ai-agent';
+    npc.userData.persona = persona;
+    npc.userData.isAi = true;
+    npc.userData.name = persona.name; // handy for debugging
+
+    // Halo: a small glowing cube floating above the head.
+    const halo = new THREE.Mesh(new THREE.BoxGeometry(0.25, 0.25, 0.25), sharedMaterials.eyeGlow);
+    halo.position.y = 2.2;
+    halo.userData = { isHalo: true };
+    npc.add(halo);
+
+    cityGroup.add(npc);
+    animRef.current.inhabitantsList.push(npc);
+    npcs.push(npc);
+  }
+  return npcs;
+}

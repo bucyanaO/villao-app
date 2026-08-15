@@ -1,0 +1,6 @@
+{
+  "name": "Obed of monde de Quartier 3D v11",
+  "description": "Une application web pour explorer un quartier stylisé en 3D créé avec React et Three.js. Interagissez avec la scène en faisant un panoramique, un zoom et une rotation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
