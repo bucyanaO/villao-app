@@ -7,6 +7,7 @@ import { useState, useRef, useEffect } from 'react';
 import type { FC } from 'react';
 import { callAgent } from '../../lib/agentGateway';
 import type { Persona, ChatMessage } from '../../engine/agents/types';
+import { useVoiceInput } from '../../hooks/useVoiceInput';
 
 export interface AgentChatProps {
   persona: Persona;
@@ -19,6 +20,7 @@ const AgentChat: FC<AgentChatProps> = ({ persona, telemetry, onClose }) => {
   const [input, setInput] = useState('');
   const [isThinking, setIsThinking] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const voice = useVoiceInput('fr-FR');
 
   // Keep the latest message in view.
   useEffect(() => {
@@ -104,6 +106,17 @@ const AgentChat: FC<AgentChatProps> = ({ persona, telemetry, onClose }) => {
           placeholder={`Message à ${persona.name}...`}
           className="flex-1 bg-black/50 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-600 focus:outline-none focus:border-cyan-500/50 focus:ring-1 focus:ring-cyan-500/20 transition-all"
         />
+        {voice.supported && (
+          <button
+            onClick={() => (voice.listening ? voice.stop() : voice.start((t) => setInput((prev) => (prev ? prev + ' ' + t : t))))}
+            className={`px-3 py-2 rounded-lg ${voice.listening ? 'bg-red-600 animate-pulse' : 'bg-white/10 hover:bg-white/20'} text-white transition-all active:scale-95`}
+            title="Parler (voix)"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+            </svg>
+          </button>
+        )}
         <button
           onClick={send}
           disabled={!input.trim() || isThinking}

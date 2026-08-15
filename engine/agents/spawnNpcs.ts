@@ -19,7 +19,14 @@ export function spawnAiNpcs(
 ): THREE.Group[] {
   const npcs: THREE.Group[] = [];
   for (const persona of personas) {
-    const npc = CityAssets.Life.createInhabitant(InhabitantState.IDLE);
+    // Walk near their spot (a small bounded patrol) so consultants feel alive,
+    // but stay around their location so the player can still find & talk to them.
+    const r = 6;
+    const bounds = {
+      minX: persona.location.x - r, maxX: persona.location.x + r,
+      minZ: persona.location.z - r, maxZ: persona.location.z + r,
+    };
+    const npc = CityAssets.Life.createInhabitant(InhabitantState.WALKING, bounds);
     npc.position.set(persona.location.x, 0.2, persona.location.z);
     npc.rotation.y = Math.random() * Math.PI * 2;
     npc.userData.type = 'ai-agent';
