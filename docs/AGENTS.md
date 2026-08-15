@@ -4,6 +4,17 @@ The city is populated by AI inhabitants you can **consult via chat**. Walk up to
 one (look for the glowing halo above its head), point at it and press **F** (or
 **X** on gamepad) — a conversation panel opens.
 
+## Qui vit dans la ville
+
+| Agents | Rôle | Fichier |
+| --- | --- | --- |
+| **Les 5 consultants** | personnages fixes (maire, boulanger, médecin, artiste, mécanicien) : on les consulte, et chacun fait bâtir SON projet | `agents/personas.ts`, `agents/spawnNpcs.ts`, `agents/autonomy.ts` |
+| **L'Atelier Villao** | 9 architectes qui lisent l'état de la ville et construisent ce qui manque, montent en compétence et font tracer des rues | `agents/studio.ts` |
+| **Les citoyens** | passants dotés d'un domicile, d'un métier (déduit de leur lieu de travail) et d'une journée ; on peut les aborder comme n'importe quel agent | `agents/citizens.ts` |
+| **La circulation** | véhicules qui suivent le graphe viaire, carrefour par carrefour | `agents/traffic.ts` |
+
+Le monde qu'ils bâtissent est décrit dans [WORLD.md](WORLD.md).
+
 ## How it's wired
 
 - `engine/agents/personas.ts` — the seed cast (mayor, baker, doctor, artist,
