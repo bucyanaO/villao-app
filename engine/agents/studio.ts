@@ -282,16 +282,6 @@ export function createStudio(ctx: StudioCtx, opts: StudioOptions = {}): Studio {
   };
 
   /**
-   * Choisit la meilleure parcelle libre pour ce programme.
-   *
-   * Trois filtres successifs :
-   *  1. la BANDE d'éloignement du centre propre au programme ;
-   *  2. les DISTANCES DE PRIORITÉ (`landuse.ts`) — c'est ce qui interdit
-   *     l'usine à côté des maisons et l'école à côté de l'usine ;
-   *  3. le SCORE : proximité du joueur (on voit la ville se faire), et
-   *     regroupement en pôle pour l'industrie / dispersion pour le reste.
-   */
-  /**
    * Cherche un terrain « sur rue » pour ce programme.
    *
    * On ne dépend pas d'un lotissement pré-découpé : on échantillonne le long
@@ -309,7 +299,9 @@ export function createStudio(ctx: StudioCtx, opts: StudioOptions = {}): Studio {
   const chooseSite = (kind: ProgramKind): Site | null => {
     const player = ctx.playerPos();
     const foot = PROGRAM_FOOTPRINT[kind] ?? 20;
-    const existing = ledgerBuildings();
+    // voisinage réel : les ouvrages du registre ET les bâtiments des quartiers,
+    // sinon une usine pourrait se poser contre les maisons d'un faubourg
+    const existing = ctx.world.places({ x: player.x, z: player.z }, WORK_RADIUS + 200);
     const cls = CLASS_OF[kind];
     const clusterR = CLUSTERS[cls];
     const rule = CENTER_RULE[kind] ?? {};
