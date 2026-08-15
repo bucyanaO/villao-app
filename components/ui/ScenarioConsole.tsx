@@ -13,7 +13,7 @@ export interface ScenarioConsoleProps {
 }
 
 const ScenarioConsole: FC<ScenarioConsoleProps> = ({ scenarioPrompt, setScenarioPrompt, handleGeminiScenario, isAnalyzing, chatLog }) => (
-  <div className="absolute top-20 right-6 bg-slate-950/95 backdrop-blur-xl p-5 rounded-2xl border border-red-500/30 shadow-[0_0_30px_rgba(239,68,68,0.2)] w-80 z-50 animate-fade-in-down">
+  <div className="absolute bottom-6 right-6 bg-slate-950/95 backdrop-blur-xl p-5 rounded-2xl border border-red-500/30 shadow-[0_0_30px_rgba(239,68,68,0.2)] w-80 z-50 animate-fade-in-down">
      <h3 className="text-white font-bold text-xs uppercase tracking-widest mb-4 flex items-center gap-2 border-b border-red-500/20 pb-2">
         <span className="text-red-500 animate-pulse">●</span> Commandes Système IA
      </h3>

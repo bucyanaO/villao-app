@@ -211,6 +211,20 @@ const App: FC = () => {
         />
       )}
 
+      {/* Chat launcher — easily accessible at the bottom */}
+      {!showScenarioInput && (
+        <button
+          onClick={() => { closeAllMenus(); setShowScenarioInput(true); }}
+          className="absolute bottom-6 right-6 z-50 flex items-center gap-2 px-4 py-3 rounded-full bg-gradient-to-r from-red-600 to-red-800 text-white font-bold text-xs uppercase tracking-wider shadow-[0_0_20px_rgba(239,68,68,0.4)] hover:from-red-500 hover:to-red-700 transition-all active:scale-95"
+          title="Parler à la cité (IA)"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" className="w-5 h-5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.76c0 1.6 1.123 2.994 2.707 3.227 1.087.16 2.185.283 3.293.369V21l4.076-4.076a1.526 1.526 0 011.037-.443 48.282 48.282 0 005.68-.494c1.484-.173 2.657-1.556 2.657-3.05V7.5a3 3 0 00-3-3H5.25a3 3 0 00-3 3v5.26z" />
+          </svg>
+          Parler
+        </button>
+      )}
+
       {/* AI agent conversation */}
       {talkingTo && (
         <AgentChat
