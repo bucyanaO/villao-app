@@ -30,6 +30,50 @@ For the full Gemini-powered experience, set a real key in `.env.local`:
 GEMINI_API_KEY=your_real_key_here
 ```
 
+## Un monde qui se construit tout seul
+
+La ville n'est plus un décor figé : elle est **bâtie, habitée et étendue par des
+agents**, et elle **persiste** d'une session à l'autre.
+
+- **Atelier Villao** (panneau en bas à gauche) : neuf architectes autonomes.
+  Ils lisent l'état de la ville — population déduite du parc de logements,
+  emplois, équipements manquants — et construisent ce qui manque le plus. Chaque
+  ouvrage livré leur donne de l'expérience : leur niveau (★) monte et débloque
+  des bâtiments plus riches. La progression est sauvegardée.
+- **Trente programmes** : maison, immeuble, bureau, boulangerie, café, magasin,
+  marché, hôtel, banque, poste, école, université, clinique, bibliothèque,
+  musée, cinéma, stade, mairie, caserne, commissariat, gare, atelier, usine,
+  entrepôt, ferme, station-service, parc énergétique, relais télécom, square.
+- **Urbanisme réel** : la voirie est déclarée avant le bâti (rien ne pousse au
+  milieu d'une rue), et des **distances de priorité** tiennent l'industrie à
+  l'écart des logements et des écoles. Quand le foncier manque, le cabinet fait
+  **tracer une rue neuve**.
+- **Extension sans fin** : en avançant, de nouveaux quartiers naissent devant
+  vous — faubourg, tours, vieille ville, jardins, zone industrielle, cité
+  béton, quartier futuriste, mégastructure — reliés au réseau par une avenue et
+  une rocade. Le sol et la forêt sont engendrés autour de vous : **on ne voit
+  jamais le bord du monde**.
+- **Vie** : les passants ont un domicile, un travail et une journée ; la
+  circulation suit le vrai réseau, carrefour après carrefour.
+- **Carte de poche** (en haut à droite) : voirie, bâti coloré par famille
+  d'usage, noms des quartiers.
+
+Détail de l'architecture logicielle : [docs/WORLD.md](docs/WORLD.md).
+
+### Paramètres d'URL (repérage / démo)
+
+| Paramètre | Effet |
+| --- | --- |
+| `?preset=0..7` | ambiance lumineuse (0 = jour, 2 = néon nocturne) |
+| `&fog=0.2` | densité de brume |
+| `&style=residential\|mixed\|region\|…` | plan de la ville d'origine |
+| `&walk=0` | démarrer en vue orbitale plutôt qu'à pied |
+| `&cam=x,y,z&look=x,y,z` | placer la caméra |
+| `&stats=1` | compteur d'images, d'appels de dessin et d'actes |
+
+La ville construite est conservée dans le navigateur (`localStorage`,
+une clé par style). Pour repartir d'une ville vierge, videz le stockage du site.
+
 ## Controls
 
 - **Walk mode (FPS):** `ZQSD` / arrows to move, `Shift` to run, `Space` to jump, `F` to interact (enter vehicle / visit building). Click to lock the pointer.

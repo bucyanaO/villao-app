@@ -1501,13 +1501,13 @@ const VoxelCityScene: React.FC<{
         const p = presets[lightingPreset] || presets[0];
         if (fogRef.current) {
             fogRef.current.color.setHex(p.fog);
-            // plancher de densité : le brouillard doit toujours masquer la
-            // frontière de génération (~430 m), sinon on verrait le monde apparaître
-            // la nuit, on desserre un peu la brume : sinon la ville éclairée
-            // disparaît avant même qu'on la voie
-            fogRef.current.density = Math.max(0.0085, p.dens * fogLevel * (p.night ? 0.72 : 1));
+            // Plancher de densité : le brouillard doit masquer la frontière de
+            // génération (~430 m) — d'où 0.005, qui sature à cette distance —
+            // sans laver la ville à 100 m. La nuit, on desserre encore un peu :
+            // sinon la ville éclairée disparaît avant même qu'on la voie.
+            fogRef.current.density = Math.max(0.005, p.dens * fogLevel * (p.night ? 0.72 : 1));
         }
-        hazeRef.current?.tune(p.fog, Math.max(0.0085, p.dens * fogLevel * (p.night ? 0.72 : 1)), p.night);
+        hazeRef.current?.tune(p.fog, Math.max(0.005, p.dens * fogLevel * (p.night ? 0.72 : 1)), p.night);
         if (ambientLightRef.current) ambientLightRef.current.intensity = p.amb;
         if (dirLightRef.current) { dirLightRef.current.intensity = p.dir; dirLightRef.current.color.setHex(p.dirC); }
         if (skyMaterialRef.current) {

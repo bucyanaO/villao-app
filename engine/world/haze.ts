@@ -56,7 +56,7 @@ export function createHaze(scene: THREE.Scene): Haze {
     const mesh = new THREE.Mesh(new THREE.PlaneGeometry(r * 2.6, r * 2.6), mat);
     mesh.rotation.x = -Math.PI / 2;
     mesh.position.y = heights[i];
-    mesh.userData = { baseY: heights[i], drift: 0.6 + i * 0.35 };
+    mesh.userData = { baseY: heights[i], drift: 0.6 + i * 0.35, baseOpacity: mat.opacity };
     group.add(mesh);
     layers.push(mesh);
   });
@@ -66,7 +66,13 @@ export function createHaze(scene: THREE.Scene): Haze {
   return {
     update(camera, time) {
       group.position.set(camera.position.x, 0, camera.position.z);
+      // Vue aérienne : on traverse les nappes par le dessus, elles laveraient
+      // toute la ville. Plus la caméra monte, plus la brume s'efface.
+      const alt = (camera as THREE.Object3D).position.y;
+      const altFactor = Math.max(0.12, Math.min(1, 1 - (alt - 18) / 110));
       for (const l of layers) {
+        const m = l.material as THREE.MeshBasicMaterial;
+        m.opacity = (l.userData.baseOpacity ?? m.opacity) * altFactor;
         // respiration lente : la brume vit, sans jamais attirer l'oeil
         l.position.y = l.userData.baseY + Math.sin(time * 0.12 * l.userData.drift) * 1.6;
         l.rotation.z = time * 0.006 * l.userData.drift;
@@ -78,7 +84,9 @@ export function createHaze(scene: THREE.Scene): Haze {
         const m = l.material as THREE.MeshBasicMaterial;
         m.color.copy(c);
         // plus le brouillard est dense, plus les nappes pèsent
-        m.opacity = Math.min(0.42, (0.10 + density * 6) * (night ? 0.8 : 1) - i * 0.02);
+        const base = Math.min(0.42, (0.10 + density * 6) * (night ? 0.8 : 1) - i * 0.02);
+        l.userData.baseOpacity = base;
+        m.opacity = base;
       });
     },
     dispose() {
