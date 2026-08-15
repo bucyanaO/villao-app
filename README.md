@@ -70,6 +70,7 @@ Détail de l'architecture logicielle : [docs/WORLD.md](docs/WORLD.md).
 | `&walk=0` | démarrer en vue orbitale plutôt qu'à pied |
 | `&cam=x,y,z&look=x,y,z` | placer la caméra |
 | `&stats=1` | compteur d'images, d'appels de dessin et d'actes |
+| `&reset=1` | repartir d'une ville vierge (efface le registre et la progression) |
 
 La ville construite est conservée dans le navigateur (`localStorage`,
 une clé par style). Pour repartir d'une ville vierge, videz le stockage du site.

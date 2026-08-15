@@ -23,6 +23,10 @@ with a hint instead of failing silently.
 | `fais apparaître un arbre en or` | Spawns a gold tree (`fais apparaître un arbre` for a normal one) |
 | `disco` | Disco special FX |
 | `kaiju` / `monstre` | Kaiju special FX |
+| `construis une école`, `il manque une clinique`, `bâtis une usine`… | Ouvre un chantier : le cabinet d'architectes confie le programme à l'agent compétent et lui cherche un terrain conforme (28 programmes reconnus) |
+| `où en est la ville ?`, `rapport`, `il manque quoi ?` | Population, emplois et besoins prioritaires |
+| `emmène-moi au nouveau quartier` | Rejoint le dernier quartier sorti de terre |
+| `ramène-moi au centre` | Retour au centre-ville |
 
 The parser normalizes accents/case/punctuation and matches keywords, with guards so
 greetings like `bonjour` don't trigger anything and `arbre orange` doesn't become gold.
