@@ -1643,9 +1643,15 @@ const VoxelCityScene: React.FC<{
         }
         // ?reset=1 : on repart d'une ville vierge (registre + progression des
         // architectes effacés) — pratique pour une démo depuis zéro.
-        if (new URLSearchParams(window.location.search).get('reset') === '1') {
+        const query = new URLSearchParams(window.location.search);
+        if (query.get('reset') === '1') {
             clearLedger(architecturalStyle);
             try { localStorage.removeItem('villao.studio.v1'); } catch { /* pas de stockage */ }
+            // on retire le drapeau de l'URL : un simple rafraîchissement ne doit
+            // pas effacer la ville qu'on vient de laisser se construire
+            query.delete('reset');
+            const q = query.toString();
+            window.history.replaceState({}, '', window.location.pathname + (q ? `?${q}` : ''));
         }
 
         expansionRef.current.reset(baseRadius, architecturalStyle);
