@@ -58,6 +58,8 @@ export interface ExpansionManager {
   frontier(): number;
   /** Recensement des programmes bâtis dans les quartiers (hors registre). */
   census(): Record<string, number>;
+  /** Tous les lieux (ouvrages du registre + bâtiments des quartiers) près d'un point. */
+  places(p: { x: number; z: number }, radius: number): { x: number; z: number; kind: string }[];
 }
 
 const LOAD_RADIUS = 430;     // au-delà, un acte n'est plus matérialisé…
@@ -319,6 +321,28 @@ export function createExpansionManager(ctx: ExpansionCtx): ExpansionManager {
 
     count: () => ledgerDistricts().length,
     frontier: () => ledgerFrontier(),
+
+    places(p, radius) {
+      // Les citoyens vivent dans TOUTE la ville, y compris les quartiers dont
+      // les bâtiments ne sont pas des actes individuels.
+      const r2 = radius * radius;
+      const out: { x: number; z: number; kind: string }[] = [];
+      for (const b of ledgerBuildings()) {
+        if ((b.x - p.x) ** 2 + (b.z - p.z) ** 2 < r2) out.push({ x: b.x, z: b.z, kind: b.kind });
+      }
+      const FORM_AS: Record<string, string> = {
+        'F:oldtown': 'maison', 'F:brutal': 'immeuble', 'F:futur': 'bureau', 'F:mega': 'immeuble',
+      };
+      for (const plan of plans.values()) {
+        if ((plan.center.x - p.x) ** 2 + (plan.center.z - p.z) ** 2 > (radius + 90) ** 2) continue;
+        for (const slot of plan.slots) {
+          if (slot.skip) continue;
+          if ((slot.x - p.x) ** 2 + (slot.z - p.z) ** 2 > r2) continue;
+          out.push({ x: slot.x, z: slot.z, kind: FORM_AS[slot.kind as string] ?? (slot.kind as string) });
+        }
+      }
+      return out;
+    },
 
     census() {
       // Les bâtiments d'un quartier ne sont pas des actes individuels (c'est le

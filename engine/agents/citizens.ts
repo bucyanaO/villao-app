@@ -14,8 +14,10 @@
  */
 import * as THREE from 'three';
 import { CityAssets, InhabitantState } from '../assets';
-import { buildings as ledgerBuildings, type BuildingAct } from '../world/ledger';
 import { isClear } from '../world/zoning';
+
+/** Un lieu de la ville (ouvrage du registre ou bâtiment de quartier). */
+export interface Place { x: number; z: number; kind: string; }
 
 type Activity = 'travail' | 'courses' | 'loisir' | 'maison';
 
@@ -28,8 +30,33 @@ const WORKPLACES = new Set([
 const SHOPS = new Set(['magasin', 'boulangerie', 'marche', 'cafe']);
 const LEISURE = new Set(['parc', 'cafe', 'cinema', 'stade', 'musee', 'bibliotheque']);
 
+const PRENOMS = [
+  'Marc', 'Sara', 'Léo', 'Nour', 'Yann', 'Aïcha', 'Tom', 'Inès', 'Hugo', 'Lina',
+  'Paul', 'Fatou', 'Jonas', 'Emma', 'Ali', 'Chloé', 'Théo', 'Maya', 'Samir', 'Jade',
+];
+
+/** Ce qu'on fait dans la vie, selon l'endroit où l'on travaille. */
+const METIER: Record<string, string> = {
+  boulangerie: 'boulanger', cafe: 'serveur', magasin: 'vendeur', marche: 'maraîcher',
+  banque: 'banquier', hotel: 'réceptionniste', bureau: 'employé de bureau',
+  usine: 'ouvrier', entrepot: 'magasinier', atelier: 'mécanicien', ferme: 'agriculteur',
+  ecole: 'professeur', universite: 'chercheur', clinique: 'infirmier', mairie: 'agent municipal',
+  poste: 'facteur', caserne: 'pompier', police: 'policier', gare: 'cheminot',
+  musee: 'guide', bibliotheque: 'bibliothécaire', cinema: 'projectionniste',
+  station_service: 'pompiste', immeuble: 'gardien', maison: 'retraité',
+};
+
+const ACTIVITY_TEXT: Record<Activity, string> = {
+  travail: 'part travailler',
+  courses: 'fait ses courses',
+  loisir: 'se promène',
+  maison: 'rentre chez lui',
+};
+
 interface Citizen {
   mesh: THREE.Group;
+  name: string;
+  job: string;
   home: { x: number; z: number };
   work: { x: number; z: number } | null;
   target: { x: number; z: number };
@@ -42,11 +69,15 @@ interface Citizen {
 export interface CitizenLife {
   /** À appeler chaque frame (peu coûteux : quelques dizaines d'agents). */
   update(dt: number, time: number, player: THREE.Vector3): void;
+  /** Le groupe qui porte les citoyens (pour le viseur d'interaction). */
+  group(): THREE.Group;
   count(): number;
   dispose(): void;
 }
 
 export interface CitizenOptions {
+  /** Où sont les bâtiments (registre + quartiers) autour d'un point. */
+  places: (p: { x: number; z: number }, radius: number) => Place[];
   /** Nombre de citoyens simulés autour du joueur. */
   population?: number;
   /** Rayon de simulation (au-delà, on recycle le citoyen ailleurs). */
@@ -57,15 +88,18 @@ export interface CitizenOptions {
 
 const dist = (a: { x: number; z: number }, b: { x: number; z: number }) => Math.hypot(a.x - b.x, a.z - b.z);
 
-export function createCitizenLife(scene: THREE.Object3D, opts: CitizenOptions = {}): CitizenLife {
+export function createCitizenLife(scene: THREE.Object3D, opts: CitizenOptions): CitizenLife {
   const POP = opts.population ?? 26;
   const RADIUS = opts.radius ?? 260;
   const DAY = opts.dayLength ?? 240;
   const citizens: Citizen[] = [];
+  const holder = new THREE.Group();
+  holder.userData = { isCitizens: true };
+  scene.add(holder);
   let rebuildClock = 0;
-  let pool: BuildingAct[] = [];
+  let pool: Place[] = [];
 
-  const near = (player: THREE.Vector3, set: Set<string>): BuildingAct[] =>
+  const near = (player: THREE.Vector3, set: Set<string>): Place[] =>
     pool.filter((b) => set.has(b.kind) && dist(b, player) < RADIUS);
 
   const pick = <T,>(arr: T[]): T | null => (arr.length ? arr[Math.floor(Math.random() * arr.length)] : null);
@@ -96,10 +130,13 @@ export function createCitizenLife(scene: THREE.Object3D, opts: CitizenOptions = 
     // dirigée par un but, pas par l'errance aléatoire du décor.
     mesh.position.set(home.x + (Math.random() - 0.5) * 8, 0.2, home.z + (Math.random() - 0.5) * 8);
     mesh.userData.isCitizen = true;
-    scene.add(mesh);
+    holder.add(mesh);
+
+    const name = PRENOMS[Math.floor(Math.random() * PRENOMS.length)];
+    const job = work ? (METIER[work.kind] ?? 'habitant') : 'habitant';
 
     const c: Citizen = {
-      mesh,
+      mesh, name, job,
       home: { x: home.x, z: home.z },
       work: work ? { x: work.x, z: work.z } : null,
       target: { x: home.x, z: home.z },
@@ -110,6 +147,22 @@ export function createCitizenLife(scene: THREE.Object3D, opts: CitizenOptions = 
     };
     c.activity = scheduleFor(hour);
     c.target = destinationFor(c, c.activity, player);
+
+    // On peut l'aborder : il devient un interlocuteur à part entière, avec son
+    // métier et ce qu'il est en train de faire.
+    mesh.userData.type = 'ai-agent';
+    mesh.userData.persona = {
+      id: `citoyen-${name}-${Math.round(home.x)}-${Math.round(home.z)}`,
+      role: job,
+      name,
+      systemPrompt:
+        `Tu es ${name}, ${job} dans la Cité Voxel. Tu habites tout près et tu ` +
+        `${ACTIVITY_TEXT[c.activity]}. Tu parles simplement, de ta vie de quartier, ` +
+        `de ton travail et de ce que tu vois autour de toi. Réponds en français, 2 à 3 phrases.`,
+      goals: ['vivre sa journée', 'parler du quartier'],
+      location: { x: home.x, z: home.z },
+    };
+
     citizens.push(c);
     return c;
   };
@@ -126,7 +179,7 @@ export function createCitizenLife(scene: THREE.Object3D, opts: CitizenOptions = 
       rebuildClock -= dt;
       if (rebuildClock <= 0) {
         rebuildClock = 3;
-        pool = ledgerBuildings().filter((b) => dist(b, player) < RADIUS * 1.4);
+        pool = opts.places({ x: player.x, z: player.z }, RADIUS * 1.4);
         // recyclage : ceux qu'on a semés trop loin repartent ailleurs
         for (const c of [...citizens]) {
           if (dist({ x: c.mesh.position.x, z: c.mesh.position.z }, player) > RADIUS * 1.6) remove(c);
@@ -146,6 +199,7 @@ export function createCitizenLife(scene: THREE.Object3D, opts: CitizenOptions = 
           if (c.wait <= 0) {
             const want = scheduleFor(hour);
             c.activity = want;
+            if (c.mesh.userData.persona) c.mesh.userData.persona.role = `${c.job}, ${ACTIVITY_TEXT[want]}`;
             c.target = destinationFor(c, want, player);
             c.wait = 2 + Math.random() * 6;
           }
@@ -192,6 +246,7 @@ export function createCitizenLife(scene: THREE.Object3D, opts: CitizenOptions = 
         }
       }
     },
+    group: () => holder,
     count: () => citizens.length,
     dispose() {
       for (const c of [...citizens]) remove(c);

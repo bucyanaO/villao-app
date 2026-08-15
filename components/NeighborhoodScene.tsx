@@ -325,7 +325,11 @@ const VoxelCityScene: React.FC<{
 
         // Monde sans bord : le sol et la forêt sont engendrés autour du joueur,
         // et la brume volumétrique dissout la frontière de génération.
-        citizensRef.current = createCitizenLife(scene);
+        // Les citoyens ont besoin de savoir où sont les bâtiments : c'est le
+        // gestionnaire de monde qui le sait (registre + quartiers).
+        citizensRef.current = createCitizenLife(scene, {
+            places: (p, r) => expansionRef.current?.places(p, r) ?? [],
+        });
         trafficRef.current = createTraffic(scene);
         terrainRef.current = createTerrain(scene);
         terrainRef.current.update({ x: camera.position.x, z: camera.position.z });
@@ -715,7 +719,11 @@ const VoxelCityScene: React.FC<{
             // --- INTERACTION RAYCASTING (Center Screen) ---
             if (controlsFPSRef.current && controlsFPSRef.current.isLocked && !vehicleRef.current.current) {
                 raycaster.setFromCamera(new THREE.Vector2(0, 0), cameraRef.current);
-                const intersects = raycaster.intersectObjects(cityGroupRef.current?.children || [], true);
+                // la ville ET les passants (qui vivent dans leur propre groupe)
+                const targets: THREE.Object3D[] = [...(cityGroupRef.current?.children || [])];
+                const citizenGroup = citizensRef.current?.group();
+                if (citizenGroup) targets.push(...citizenGroup.children);
+                const intersects = raycaster.intersectObjects(targets, true);
                 
                 let foundInteractable = false;
                 
@@ -724,7 +732,7 @@ const VoxelCityScene: React.FC<{
 
                     let obj = intersects[i].object;
                     // Traverse up to find group with userdata
-                    while(obj.parent && obj.parent !== cityGroupRef.current) obj = obj.parent;
+                    while (obj.parent && obj.parent !== cityGroupRef.current && !obj.userData.isCitizen) obj = obj.parent;
                     
                     if (obj.userData.type === 'vehicle' || obj.userData.isAircraft) {
                         interactionRef.current.target = obj;
@@ -741,7 +749,10 @@ const VoxelCityScene: React.FC<{
                     } else if (obj.userData.type === 'ai-agent') {
                         interactionRef.current.target = obj;
                         interactionRef.current.type = 'agent';
-                        if (setInteractionLabel) setInteractionLabel("PARLER");
+                        const p = obj.userData.persona;
+                        if (setInteractionLabel) {
+                            setInteractionLabel(p && obj.userData.isCitizen ? `PARLER À ${p.name.toUpperCase()} (${p.role})` : 'PARLER');
+                        }
                         foundInteractable = true;
                         break;
                     }
