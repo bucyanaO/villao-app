@@ -38,6 +38,8 @@ import { createTraffic } from '../engine/agents/traffic';
 import type { Traffic } from '../engine/agents/traffic';
 import type { CitizenLife } from '../engine/agents/citizens';
 import { updateLod } from '../engine/world/lod';
+import { sampleMap } from '../engine/world/minimap';
+import type { MapSample } from '../engine/world/minimap';
 import { createTerrain } from '../engine/world/terrain';
 import type { Terrain } from '../engine/world/terrain';
 import { save as saveLedger, acts as ledgerActs } from '../engine/world/ledger';
@@ -59,7 +61,9 @@ const VoxelCityScene: React.FC<{
     /** Journal du cabinet d'architectes (constructions, promotions, rues ouvertes) */
     onStudioEvent?: (e: StudioEvent, roster?: Architect[], report?: CityReport) => void,
     /** Télémétrie de tenue en charge (activée par ?stats=1) */
-    onStats?: (s: { fps: number; draws: number; tris: number; buildings: number; acts: number; frontier: number; tiles: number }) => void
+    onStats?: (s: { fps: number; draws: number; tris: number; buildings: number; acts: number; frontier: number; tiles: number }) => void,
+    /** Échantillon du monde pour la carte de poche */
+    onMinimap?: (m: MapSample) => void
 }> = ({
     lightingPreset = 0, 
     fogLevel = 1.0, 
@@ -72,7 +76,8 @@ const VoxelCityScene: React.FC<{
     setIsDriving,
     onTalkToAgent,
     onStudioEvent,
-    onStats
+    onStats,
+    onMinimap
 }) => {
     const mountRef = useRef<HTMLDivElement>(null);
     
@@ -128,6 +133,7 @@ const VoxelCityScene: React.FC<{
     const terrainClockRef = useRef(0);
     const statsRef = useRef({ clock: 0, frames: 0 });
     const lodClockRef = useRef(0);
+    const mapClockRef = useRef(0);
     
     // Weather System Refs
     const weatherSystemRef = useRef<THREE.Points | null>(null);
@@ -561,6 +567,20 @@ const VoxelCityScene: React.FC<{
                     : (controlsRef.current ? controlsRef.current.target : cameraRef.current.position);
                 citizensRef.current.update(d, time, p as THREE.Vector3);
                 trafficRef.current?.update(d, p as THREE.Vector3);
+            }
+
+            // --- CARTE DE POCHE (2×/s) ---
+            if (onMinimap) {
+                mapClockRef.current += d;
+                if (mapClockRef.current > 0.5) {
+                    mapClockRef.current = 0;
+                    const focus = walkModeRef.current || vehicleRef.current.current
+                        ? cameraRef.current.position
+                        : (controlsRef.current ? controlsRef.current.target : cameraRef.current.position);
+                    const dir = new THREE.Vector3();
+                    cameraRef.current.getWorldDirection(dir);
+                    onMinimap(sampleMap({ x: focus.x, z: focus.z }, Math.atan2(dir.x, dir.z)));
+                }
             }
 
             // --- NIVEAU DE DÉTAIL : au loin, les bâtiments deviennent silhouettes ---
@@ -1591,6 +1611,11 @@ const VoxelCityScene: React.FC<{
             });
         }
         expansionRef.current.reset(baseRadius, architecturalStyle);
+
+        // Habitants et circulation repartent de zéro : leurs domiciles, lieux de
+        // travail et itinéraires appartenaient à la ville précédente.
+        citizensRef.current?.dispose();
+        trafficRef.current?.dispose();
 
         // Le sol/la forêt sont resemés MAINTENANT que le cadastre de la nouvelle
         // ville existe : sinon les arbres pousseraient au milieu des rues.

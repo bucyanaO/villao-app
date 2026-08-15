@@ -19,7 +19,9 @@ import SettingsPanel from './components/ui/SettingsPanel';
 import AudioElements from './components/ui/AudioElements';
 import AgentChat from './components/ui/AgentChat';
 import StudioPanel from './components/ui/StudioPanel';
+import MiniMap from './components/ui/MiniMap';
 import type { StudioEvent, Architect, CityReport } from './engine/agents/studio';
+import type { MapSample } from './engine/world/minimap';
 import type { Persona } from './engine/agents/types';
 
 /**
@@ -65,6 +67,7 @@ const App: FC = () => {
   const showStats = q.get('stats') === '1';
   const [stats, setStats] = useState<{ fps: number; draws: number; tris: number; buildings: number; acts: number; frontier: number; tiles: number } | null>(null);
   const [cityReport, setCityReport] = useState<CityReport | null>(null);
+  const [mapSample, setMapSample] = useState<MapSample | null>(null);
   const onStudioEvent = (e: StudioEvent, roster?: Architect[], report?: CityReport) => {
     setStudioEvents((prev) => [...prev.slice(-40), e]);
     if (roster) setStudioRoster(roster.map((a) => ({ ...a })));
@@ -145,7 +148,11 @@ const App: FC = () => {
         onTalkToAgent={setTalkingTo}
         onStudioEvent={onStudioEvent}
         onStats={showStats ? setStats : undefined}
+        onMinimap={setMapSample}
       />
+
+      {/* Carte de poche : on ne se perd pas dans un monde sans bord */}
+      <MiniMap sample={mapSample} />
 
       {showStats && stats && (
         <div className="pointer-events-none fixed left-4 top-4 z-30 rounded border border-cyan-500/30 bg-slate-950/80 px-3 py-2 font-mono text-[11px] text-cyan-200 backdrop-blur">

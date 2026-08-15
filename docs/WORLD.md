@@ -48,6 +48,25 @@ de foncier. Chaque ouvrage livré donne de l'expérience : les niveaux montent
 boulanger sa boutique, le médecin sa clinique), le programme étant choisi par
 le modèle *dans le rôle*, jamais l'emplacement.
 
+## La ville est habitée
+
+`agents/citizens.ts` — chaque passant a un domicile, un travail et une journée
+(travail le matin, courses à midi, loisir le soir, retour la nuit). Ses
+destinations sont de vrais bâtiments du registre : la vie de rue est le reflet
+exact de ce qui a été construit.
+
+`agents/traffic.ts` — la circulation construit un graphe à partir du cadastre et
+roule d'un carrefour à l'autre, à droite, en ralentissant derrière le véhicule
+qui précède. Une rue tracée à l'instant reçoit du trafic au tour suivant.
+
+## Voir sans ramer
+
+- `lod.ts` — au-delà de 130 m un bâtiment cède la place à sa silhouette (une
+  boîte teintée de sa couleur dominante). C'est ce qui fait passer la scène de
+  16 000 appels de dessin à ~2 500 sans changer la silhouette de la ville.
+- `minimap.ts` + `components/ui/MiniMap.tsx` — carte de poche : voirie, bâti
+  coloré par famille d'usage, noms de quartiers, nord en haut.
+
 ## Le décor
 
 - `terrain.ts` — sol et forêt en tuiles engendrées autour du joueur. Un arbre
