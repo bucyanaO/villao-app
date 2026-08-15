@@ -152,6 +152,23 @@ export function createTerrain(scene: THREE.Object3D): Terrain {
     return g;
   };
 
+  /**
+   * Libère une tuile. Les géométries partagées (arbres, rochers) ne sont jamais
+   * détruites, mais le sol et surtout les tampons d'instances le sont : sans
+   * cela, une longue session accumule des mégaoctets sur la carte graphique et
+   * finit par faire perdre le contexte WebGL — écran noir.
+   */
+  const disposeTile = (g: THREE.Group) => {
+    g.traverse((c: any) => {
+      if (c.isInstancedMesh) c.dispose();
+      if (c.geometry && c.geometry !== coneGeo && c.geometry !== blobGeo
+          && c.geometry !== trunkGeo && c.geometry !== rockGeo) {
+        c.geometry.dispose();
+      }
+    });
+    g.parent?.remove(g);
+  };
+
   return {
     update(player) {
       const pi = Math.round(player.x / TILE);
@@ -172,8 +189,7 @@ export function createTerrain(scene: THREE.Object3D): Terrain {
       for (const [kk, g] of [...tiles]) {
         const [i, j] = kk.split(':').map(Number);
         if (Math.abs(i - pi) > DROP_RING || Math.abs(j - pj) > DROP_RING) {
-          g.traverse((c: any) => { if (c.geometry && c.geometry !== coneGeo && c.geometry !== blobGeo && c.geometry !== trunkGeo && c.geometry !== rockGeo) c.geometry.dispose(); });
-          g.parent?.remove(g);
+          disposeTile(g);
           tiles.delete(kk);
         }
       }
@@ -186,13 +202,13 @@ export function createTerrain(scene: THREE.Object3D): Terrain {
           const kk = key(i, j);
           const g = tiles.get(kk);
           if (!g) continue;
-          g.parent?.remove(g);
+          disposeTile(g);
           tiles.delete(kk);   // resemée à la prochaine mise à jour, cadastre à jour
         }
       }
     },
     dispose() {
-      for (const [, g] of tiles) g.parent?.remove(g);
+      for (const [, g] of tiles) disposeTile(g);
       tiles.clear();
     },
     tileCount: () => tiles.size,
