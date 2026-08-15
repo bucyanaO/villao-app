@@ -1,73 +1,80 @@
 /**
- * Agent autonomy — the "ville qui se construit elle-même".
+ * AUTONOMIE DES HABITANTS — « la ville que ses habitants se donnent ».
  *
- * On a slow tick, each AI persona builds ONE building on a defined BUILD_LOT
- * (off-road, off-villa) near it. WHERE = a free lot (so nothing lands on a road);
- * WHAT = decided by the model (Gemma via the gateway), role-playing as the NPC
- * "according to itself" — floors, style, color. If the model is unreachable or
- * returns bad JSON, a safe scripted build is used. Executed through the existing
- * `GodOperation` path, so it renders via `aiBuildingsRef`.
+ * À côté du cabinet d'architectes (qui applique un plan d'urbanisme), chaque
+ * persona réalise SON projet, celui qui lui ressemble : le boulanger veut sa
+ * boutique, le médecin sa clinique, le maire sa mairie, le mécanicien son
+ * atelier. Le QUOI est décidé par le modèle (Gemma via la passerelle) en
+ * jouant le personnage ; si le modèle est injoignable ou répond n'importe quoi,
+ * on retombe sur le projet évident pour ce rôle.
  *
- * Hard caps: one build per persona, a small global budget, one decision in flight.
+ * Le OÙ n'est jamais laissé au modèle : c'est le monde qui donne un terrain
+ * légal (cadastre + distances de priorité). Et comme tout passe par le
+ * registre, ces bâtiments SURVIVENT au rechargement.
  */
-import type { GodOperation } from '../types';
-import { executeGodOperations } from '../godOperations';
-import type { GodOpsCtx } from '../godOperations';
 import type { Persona } from './types';
-import { BUILD_LOTS, nearestFreeLot, lotIndex, type Lot } from './lots';
+import type { ExpansionManager } from '../world/expansion';
+import type { ProgramKind } from '../world/programs';
+import { PROGRAM_LABEL } from '../world/programs';
+import { nearestFreePlot, isBuildable, roadsNear } from '../world/zoning';
 import { callAgent } from '../../lib/agentGateway';
 
-export interface AutonomyCtx extends GodOpsCtx {
+export interface AutonomyCtx {
+  world: ExpansionManager;
   personas: Persona[];
+  onEvent?: (text: string) => void;
 }
 export interface AutonomyOptions { intervalMs?: number; initialDelayMs?: number; maxBuilds?: number; }
 
-const BUILD_STYLES = ['modern', 'cyberpunk', 'brutalist'] as const;
+/** Le projet « évident » de chaque rôle — utilisé en repli. */
+const DEFAULT_PROJECT: Record<string, ProgramKind> = {
+  mayor: 'mairie', baker: 'magasin', doctor: 'clinique', artist: 'parc', mechanic: 'atelier',
+};
 
-/** Safe scripted build on a specific (off-road) lot. */
-function scriptedBuild(persona: Persona, lot: Lot): GodOperation {
-  return {
-    action: 'BUILD',
-    selector: { type: 'all' },
-    params: {
-      position: { x: lot.x, y: 0, z: lot.z },
-      floors: 2 + Math.floor(Math.random() * 3),
-      style: BUILD_STYLES[Math.floor(Math.random() * BUILD_STYLES.length)],
-      color: '#cccccc',
-    },
-  };
-}
+const ALLOWED: ProgramKind[] = ['maison', 'magasin', 'marche', 'atelier', 'clinique', 'ecole', 'mairie', 'parc', 'immeuble'];
 
-/** Ask the model (as this NPC) WHAT to build on this lot; return a GodOperation. */
-async function llmDecide(persona: Persona, lot: Lot): Promise<GodOperation | null> {
+/** Demande au modèle, DANS LE RÔLE, ce que la persona veut bâtir. */
+async function llmChooseProject(persona: Persona): Promise<ProgramKind | null> {
   const sys =
     `Tu es ${persona.name}, ${persona.role}, habitant de la Cité Voxel 3D. ` +
     `Objectifs: ${persona.goals.join(', ')}. ` +
-    `Tu as un terrain libre à la position (${lot.x}, ${lot.z}). ` +
-    `Décide QUOI y construire. ` +
-    `Réponds UNIQUEMENT avec un objet JSON, AUCUN texte autour, exactement: ` +
-    `{"action":"BUILD","selector":{"type":"all"},"params":{"position":{"x":${lot.x},"y":0,"z":${lot.z}},"floors":<2 a 4>,"style":"modern","color":"#cccccc"}}. ` +
-    `Contraintes: floors entre 2 et 4, style parmi "modern","cyberpunk","brutalist", color en hex.`;
+    `La ville t'accorde UN terrain. Choisis CE QUE TU VEUX Y BÂTIR, selon ton rôle. ` +
+    `Réponds par UN SEUL MOT parmi: ${ALLOWED.join(', ')}. Aucun autre texte.`;
   try {
     const reply = await callAgent({
       persona: { ...persona, systemPrompt: sys },
-      messages: [{ role: 'user', content: 'Décide et renvoie uniquement le JSON.' }],
+      messages: [{ role: 'user', content: 'Un seul mot.' }],
     });
-    const match = reply.match(/\{[\s\S]*\}/);
-    if (!match) return null;
-    const op = JSON.parse(match[0]) as GodOperation;
-    if (op?.action === 'BUILD' && op.params) {
-      const p = op.params;
-      p.position = { x: lot.x, y: 0, z: lot.z }; // force the off-road lot
-      p.floors = Math.max(2, Math.min(4, Math.round(p.floors as number) || 3));
-      if (!p.style || !['modern', 'cyberpunk', 'brutalist'].includes(p.style)) p.style = 'modern';
-      if (!p.color) p.color = '#cccccc';
-      return op;
-    }
-    return null;
+    const word = reply.toLowerCase().replace(/[^a-zéèêç]/g, '');
+    const hit = ALLOWED.find((k) => word.includes(k));
+    return hit ?? null;
   } catch {
     return null;
   }
+}
+
+/** Un terrain légal proche de la persona (parcelle libre, sinon bord de rue). */
+function siteFor(persona: Persona, footprintGuess = 18): { x: number; z: number; angle: number } | null {
+  const plot = nearestFreePlot(persona.location, 260);
+  if (plot) return { x: plot.x, z: plot.z, angle: Math.atan2(-plot.x, -plot.z) };
+
+  for (const seg of roadsNear(persona.location, 220)) {
+    const dx = seg.x2 - seg.x1, dz = seg.z2 - seg.z1;
+    const len = Math.hypot(dx, dz);
+    if (len < 6) continue;
+    const ux = dx / len, uz = dz / len, nx = uz, nz = -ux;
+    const setback = seg.w / 2 + footprintGuess / 2 + 2.5;
+    for (let t = 0; t <= len; t += 14) {
+      for (const side of [-1, 1]) {
+        const x = seg.x1 + ux * t + nx * side * setback;
+        const z = seg.z1 + uz * t + nz * side * setback;
+        if (isBuildable(x, z, footprintGuess)) {
+          return { x, z, angle: Math.atan2(-side * nx, -side * nz) };
+        }
+      }
+    }
+  }
+  return null;
 }
 
 export function createAutonomyTicker(ctx: AutonomyCtx, opts: AutonomyOptions = {}) {
@@ -80,7 +87,6 @@ export function createAutonomyTicker(ctx: AutonomyCtx, opts: AutonomyOptions = {
   let idx = 0;
   let busy = false;
   const builtFor = new Set<string>();
-  const usedLots = new Set<number>();
 
   const tick = async () => {
     if (busy || built >= maxBuilds) { if (built >= maxBuilds) stop(); return; }
@@ -91,30 +97,31 @@ export function createAutonomyTicker(ctx: AutonomyCtx, opts: AutonomyOptions = {
     }
     if (builtFor.has(persona.id)) { stop(); return; }
 
-    // WHERE: a free off-road lot near this persona.
-    const lot = nearestFreeLot(persona.location, usedLots);
-    if (!lot) { stop(); return; }
-    usedLots.add(lotIndex(lot));
-
     busy = true;
-    let op: GodOperation | null = null;
-    try { op = await llmDecide(persona, lot); } catch { op = null; }
-    if (!op) op = scriptedBuild(persona, lot); // safe fallback on the same lot
-
-    try { executeGodOperations([op], ctx); } catch (e) { console.warn('Autonomy build failed:', e); }
-    builtFor.add(persona.id);
-    built++;
-    idx++;
-    busy = false;
+    try {
+      const kind = (await llmChooseProject(persona)) ?? DEFAULT_PROJECT[persona.id] ?? 'maison';
+      const site = siteFor(persona);
+      if (site) {
+        const ok = ctx.world.place(kind, site.x, site.z, site.angle, 3, persona.name);
+        if (ok) {
+          builtFor.add(persona.id);
+          built++;
+          ctx.onEvent?.(`${persona.name} (${persona.role}) fait bâtir ${PROGRAM_LABEL[kind]}.`);
+        }
+      }
+    } catch (e) {
+      console.warn('Autonomy build failed:', e);
+    } finally {
+      idx++;
+      busy = false;
+    }
   };
 
   const start = () => {
     if (timer != null) return;
-    timer = setTimeout(() => { tick(); timer = setInterval(() => void tick(), intervalMs); }, initialDelayMs);
+    timer = setTimeout(() => { void tick(); timer = setInterval(() => void tick(), intervalMs); }, initialDelayMs);
   };
   const stop = () => { if (timer != null) { clearTimeout(timer); clearInterval(timer as any); timer = null; } };
 
   return { start, stop };
 }
-
-export { BUILD_LOTS };

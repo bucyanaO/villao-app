@@ -18,6 +18,8 @@ import ControlsOverlay from './components/ui/ControlsOverlay';
 import SettingsPanel from './components/ui/SettingsPanel';
 import AudioElements from './components/ui/AudioElements';
 import AgentChat from './components/ui/AgentChat';
+import StudioPanel from './components/ui/StudioPanel';
+import type { StudioEvent, Architect } from './engine/agents/studio';
 import type { Persona } from './engine/agents/types';
 
 /**
@@ -37,18 +39,33 @@ const App: FC = () => {
   const [showWeatherMenu, setShowWeatherMenu] = useState(false);
   const [showScenarioInput, setShowScenarioInput] = useState(false);
 
+  // Repérage/debug : ?preset=0&fog=0.3&style=mixed&walk=0 initialise la scène.
+  const q = new URLSearchParams(window.location.search);
+  const qNum = (key: string, fallback: number) => {
+    const v = Number(q.get(key));
+    return q.has(key) && Number.isFinite(v) ? v : fallback;
+  };
+
   // --- Scene / simulation state ---
-  const [lightingPreset, setLightingPreset] = useState(2); // Start with Néon Nocturne
-  const [fogLevel, setFogLevel] = useState(1.0);
-  const [architecturalStyle, setArchitecturalStyle] = useState('residential');
+  const [lightingPreset, setLightingPreset] = useState(qNum('preset', 2)); // Start with Néon Nocturne
+  const [fogLevel, setFogLevel] = useState(qNum('fog', 1.0));
+  const [architecturalStyle, setArchitecturalStyle] = useState(q.get('style') || 'residential');
   const [weather, setWeather] = useState<'clear' | 'rain' | 'snow'>('clear');
   const [autoPilot, setAutoPilot] = useState(false);
 
   // --- Walk / drive state ---
-  const [walkMode, setWalkMode] = useState(true);
+  const [walkMode, setWalkMode] = useState(qNum('walk', 1) === 1);
   const [interactionLabel, setInteractionLabel] = useState<string | null>(null);
   const [isDriving, setIsDriving] = useState(false);
   const [talkingTo, setTalkingTo] = useState<Persona | null>(null);
+
+  // --- Cabinet d'architectes (ville autonome) ---
+  const [studioEvents, setStudioEvents] = useState<StudioEvent[]>([]);
+  const [studioRoster, setStudioRoster] = useState<Architect[]>([]);
+  const onStudioEvent = (e: StudioEvent, roster?: Architect[]) => {
+    setStudioEvents((prev) => [...prev.slice(-40), e]);
+    if (roster) setStudioRoster(roster.map((a) => ({ ...a })));
+  };
 
   // --- Feature hooks ---
   const gamepadConnected = useGamepad();
@@ -122,7 +139,11 @@ const App: FC = () => {
         setInteractionLabel={setInteractionLabel}
         setIsDriving={setIsDriving}
         onTalkToAgent={setTalkingTo}
+        onStudioEvent={onStudioEvent}
       />
+
+      {/* Ce que les agents sont en train de bâtir */}
+      <StudioPanel events={studioEvents} roster={studioRoster} />
 
       {/* HUDs */}
       {walkMode && interactionLabel && !isDriving && (

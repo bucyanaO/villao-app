@@ -7,6 +7,7 @@ import type { MutableRefObject } from 'react';
 import { CITY_THEME } from './theme';
 import { CityAssets, sharedMaterials, getMaterial, getCachedGeometry, LineMerger, MeshMerger, InhabitantState, InstanceData } from './assets';
 import type { AnimState, FxRefs } from './context';
+import { resetZoning, addRoad, addRoadAxis, addRoadRing, occupy, addPlot, setCityRadius } from './world/zoning';
 
 export interface CityGenCtx {
   cityGroup: THREE.Group;
@@ -56,11 +57,17 @@ function cleanScene(group: THREE.Group, animRef: MutableRefObject<AnimState>, fx
 };
 
 
-export const generateCity = (ctx: CityGenCtx) => {
+/**
+ * Builds the city and (re)declares the cadastre (`engine/world/zoning`):
+ * roads first, then every footprint, then the free plots. Returns the radius of
+ * the urbanised area so the caller can plant the forest belt beyond it.
+ */
+export const generateCity = (ctx: CityGenCtx): number => {
     const { architecturalStyle } = ctx;
     const cityGroup = ctx.cityGroup;
     cleanScene(cityGroup, ctx.animRef, ctx.fxRefs);
-    
+    resetZoning(architecturalStyle);
+
     const treeData = { trunks: [] as InstanceData[], foliageBoxes: [] as InstanceData[], foliageIcos: [] as InstanceData[], foliageCones: [] as InstanceData[] };
     const lampData = { poles: [] as InstanceData[], fixtures: [] as InstanceData[], arms: [] as InstanceData[] };
     const propData = { benches: [] as InstanceData[], signs: [] as InstanceData[], bins: [] as InstanceData[], mailboxes: [] as InstanceData[], tlPoles: [] as InstanceData[], tlHousings: [] as InstanceData[] };
@@ -74,11 +81,8 @@ export const generateCity = (ctx: CityGenCtx) => {
     const roadBorderMerger = new LineMerger(); 
     const patchMerger = new MeshMerger(sharedMaterials.patchAsphalt);
 
-    // Ground Plane - VOXEL STYLE (SQUARE)
-    const earthGeo = new THREE.PlaneGeometry(800, 800); earthGeo.rotateX(-Math.PI / 2);
-    const earthMat = new THREE.MeshBasicMaterial({ color: 0x1a261a, side: THREE.DoubleSide }); 
-    const earth = new THREE.Mesh(earthGeo, earthMat); earth.position.y = -0.1; earth.userData.isPersistent = true;
-    cityGroup.add(earth);
+    // Pas de « plaque » de sol ici : le sol est infini et streamé autour du
+    // joueur (`engine/world/terrain.ts`). On ne voit donc jamais son bord.
 
     const batchTree = (x: number, z: number) => {
         const scale = 0.8 + Math.random() * 0.5; const trunkH = 1.5 * scale;
@@ -182,7 +186,7 @@ export const generateCity = (ctx: CityGenCtx) => {
         animatedObjects.screens.forEach(s => ctx.animRef.current.screenList.push(s));
         
         const pool = CityAssets.Props.createSwimmingPool(7, 4); pool.position.set(0, 0, -12); group.add(pool);
-        const poolDeck = CityAssets.Props.createDeck(9, 6); poolDeck.position.set(0, 0, -12); group.add(poolDeck);
+        const poolDeck = CityAssets.Props.createDeck(8.4, 5.4); poolDeck.position.set(0, 0, -12); group.add(poolDeck);
         if (style === 'frame' || style === 'stack') { const refPool = CityAssets.Props.createReflectingPool(5, 3); refPool.position.set(-4, 0, 7); group.add(refPool); }
         const dwLen = 14; 
         for(let k=0; k<6; k++) { const strip = CityAssets.primitives.createSolidObject(3.5, 0.05, 1.5, sharedMaterials.sidewalkConcrete, 'box'); strip.position.set(4, 0.05, 5 + k*2); group.add(strip); }
@@ -203,13 +207,14 @@ export const generateCity = (ctx: CityGenCtx) => {
         const separatorCount = 4;
         for (let i = 0; i < separatorCount; i++) {
            const t = i / (separatorCount - 1); const zPos = 10 - t * 24; 
-           let halfWidth = 14; if (isRadial) { const widthFront = 6; const widthBack = 28; halfWidth = widthFront + t * (widthBack - widthFront); }
+           let halfWidth = 14; if (isRadial) { const widthFront = 6; const widthBack = 17; halfWidth = widthFront + t * (widthBack - widthFront); }
            let scale = 0.8 + Math.random() * 0.4; if (Math.random() < 0.05) scale = 2.5 + Math.random() * 1.5;
            const treeL = CityAssets.Props.createHolographicTree(scale, CITY_THEME.colors.props.greenFoliage); treeL.position.set(-halfWidth, 0, zPos); treeL.rotation.y = Math.random() * Math.PI; group.add(treeL);
            const treeR = CityAssets.Props.createHolographicTree(scale, CITY_THEME.colors.props.greenFoliage); treeR.position.set(halfWidth, 0, zPos); treeR.rotation.y = Math.random() * Math.PI; group.add(treeR);
         }
         
         group.userData = { isBuilding: true, expanded: false }; // Mark for interaction
+        occupy(x, z, 15); // cadastre: villa + jardin + allée (rien ne peut être bâti dessus)
         cityGroup.add(group); ctx.animRef.current.buildingsList.push(group);
     };
     
@@ -237,8 +242,13 @@ export const generateCity = (ctx: CityGenCtx) => {
     spawnAircraft();
 
     // Main Generation Switch
+    let baseRadius = 90;
     if (architecturalStyle === 'residential') {
         const STEM_LENGTH = 160; const STEM_Z_START = 160; const STEM_Z_END = 15; const LOOP_RADIUS = 22; const ROAD_WIDTH = 10;
+        // --- CADASTRE : les routes d'abord, avant toute construction
+        addRoadAxis('z', 0, STEM_Z_END - 5, STEM_Z_START, ROAD_WIDTH);
+        addRoadRing(0, 0, LOOP_RADIUS, ROAD_WIDTH, 32);
+        occupy(0, 0, 15); // le parc central
         const stemM = new THREE.Matrix4(); stemM.setPosition(0, 0.02, (STEM_Z_START + STEM_Z_END) / 2); asphaltMerger.addBox(stemM, ROAD_WIDTH, 0.05, STEM_Z_START - STEM_Z_END);
         const dashLen = 2, gapLen = 2; const stemDist = STEM_Z_START - STEM_Z_END; const numDashes = Math.floor(stemDist / (dashLen + gapLen));
         for(let k=0; k<numDashes; k++) { const pz = STEM_Z_END + k*(dashLen+gapLen) + dashLen; const m = new THREE.Matrix4(); m.setPosition(0, 0.03, pz); markingMerger.addBox(m, 0.2, 0.05, dashLen); }
@@ -262,13 +272,25 @@ export const generateCity = (ctx: CityGenCtx) => {
         const stemPlotSteps = 7; const startPlotZ = STEM_Z_END + 15; const plotGap = 22;
         for (let i = 0; i < stemPlotSteps; i++) { const z = startPlotZ + i * plotGap; if (z > STEM_Z_START - 10) break; createModernVilla(-32, z, -Math.PI / 2, false); createModernVilla(32, z, Math.PI / 2, false); batchStreetLamp(-7, z - 10, 0); batchStreetLamp(7, z - 10, Math.PI); }
         const loopHouseCount = 8;
-        for (let i = 0; i < loopHouseCount; i++) { const angle = (i / loopHouseCount) * Math.PI * 2; if (Math.abs(angle) < 0.4 || Math.abs(angle - Math.PI*2) < 0.4) continue; const r = 38; const x = Math.sin(angle) * r; const z = Math.cos(angle) * r; createModernVilla(x, z, angle + Math.PI, true); const lr = LOOP_RADIUS - 2; batchStreetLamp(Math.sin(angle)*lr, Math.cos(angle)*lr, angle + Math.PI); }
+        // r = 46 : l'allée d'entrée (14 m) + le trottoir viennent affleurer le
+        // bord extérieur de la boucle sans jamais mordre dessus. À r = 38, les
+        // allées, les terrasses et les rangées d'arbres débordaient EN PLEIN
+        // MILIEU du rond — c'est ce désordre-là qu'on supprime.
+        for (let i = 0; i < loopHouseCount; i++) { const angle = (i / loopHouseCount) * Math.PI * 2; if (Math.abs(angle) < 0.4 || Math.abs(angle - Math.PI*2) < 0.4) continue; const r = 48; const x = Math.sin(angle) * r; const z = Math.cos(angle) * r; createModernVilla(x, z, angle + Math.PI, true); const lr = LOOP_RADIUS + 7; batchStreetLamp(Math.sin(angle)*lr, Math.cos(angle)*lr, angle + Math.PI); }
         const park = CityAssets.Layouts.createParkBlock(); park.group.position.set(0, 0, 0); park.group.scale.set(1.5, 1, 1.5); cityGroup.add(park.group);
         ctx.animRef.current.pois.push(new THREE.Vector3(0, 1, 0)); // PARK POI
         const statue = CityAssets.Props.createHoloStatue(); statue.position.set(0, 0.1, 0); cityGroup.add(statue);
         park.inhabitants.forEach(i => { i.position.multiplyScalar(1.5); cityGroup.add(i); ctx.animRef.current.inhabitantsList.push(i) });
         park.droplets.forEach(d => ctx.animRef.current.fountainDropletsList.push(d));
         park.benchData.forEach(bd => { const m = bd.mat.clone(); const pos = new THREE.Vector3(); const rot = new THREE.Quaternion(); const scl = new THREE.Vector3(); m.decompose(pos, rot, scl); pos.multiplyScalar(1.5); m.compose(pos, rot, scl); propData.benches.push({mat: m}); });
+
+        // --- PARCELLES : balayage régulier, on ne garde que ce qui est légal
+        for (let px = -66; px <= 66; px += 22) {
+            for (let pz = -44; pz <= 156; pz += 22) {
+                addPlot(px, pz, 14, 'Quartier résidentiel');
+            }
+        }
+        baseRadius = 175;
 
     } else if (architecturalStyle === 'region') {
         // === REGION: several towns on one map, connected by a road network ===
@@ -286,12 +308,16 @@ export const generateCity = (ctx: CityGenCtx) => {
                 markingMerger.addBox(dm, 0.2, 0.05, dashLen);
             }
         };
-        // road network connecting every pair of towns
+        // road network connecting every pair of towns (cadastre first)
+        for (const [a, b] of [[0, 1], [0, 2], [1, 2]] as const) {
+            addRoad(towns[a].x, towns[a].z, towns[b].x, towns[b].z, roadW);
+        }
         drawRoad(towns[0], towns[1]); drawRoad(towns[0], towns[2]); drawRoad(towns[1], towns[2]);
         const wallColors = CITY_THEME.colors.buildings.walls;
         const styles = ['modern', 'cyberpunk', 'brutalist'] as const;
         towns.forEach((t, ti) => {
             // central plaza
+            occupy(t.x, t.z, 18);
             const pm = new THREE.Matrix4(); pm.setPosition(t.x, 0.04, t.z); sidewalkMerger.addBox(pm, 32, 0.05, 32);
             // 4 procedural buildings around the plaza (with lit windows)
             for (let i = 0; i < 4; i++) {
@@ -301,6 +327,7 @@ export const generateCity = (ctx: CityGenCtx) => {
                 const wc = wallColors[Math.floor(Math.random() * wallColors.length)];
                 const bd = CityAssets.Layouts.createProceduralBuilding(11, 11, floors, styles[Math.floor(Math.random() * 3)], wc);
                 bd.group.position.set(bx, 0, bz); bd.group.rotation.y = ang + Math.PI;
+                occupy(bx, bz, 9);
                 bd.group.userData = { isBuilding: true, expanded: false };
                 cityGroup.add(bd.group); ctx.animRef.current.buildingsList.push(bd.group);
                 bd.animatedObjects.fans.forEach((f: any) => ctx.animRef.current.fanList.push(f));
@@ -312,6 +339,14 @@ export const generateCity = (ctx: CityGenCtx) => {
             }
             ctx.animRef.current.pois.push(new THREE.Vector3(t.x, 1, t.z));
         });
+        // parcelles : une couronne autour de chaque bourg
+        towns.forEach((t) => {
+            for (let i = 0; i < 10; i++) {
+                const a = (i / 10) * Math.PI * 2;
+                addPlot(t.x + Math.cos(a) * 46, t.z + Math.sin(a) * 46, 14, 'Bourg');
+            }
+        });
+        baseRadius = 190;
     } else {
         const batchTrafficLightStructure = (x: number, z: number, axis: 'x' | 'z') => {
             const pObj = new THREE.Object3D(); pObj.position.set(x, 2.25, z); pObj.scale.set(0.2, 4.5, 0.2); pObj.updateMatrix(); propData.tlPoles.push({ mat: pObj.matrix.clone() });
@@ -329,9 +364,19 @@ export const generateCity = (ctx: CityGenCtx) => {
            }
        };
        const GRID_RADIUS = 2; const blockSize = 16; const gap = 10; const fullStep = blockSize + gap;
+       // --- CADASTRE : toutes les avenues de la grille, déclarées avant de bâtir
+       {
+           const mapSize = (GRID_RADIUS * 2 + 2) * fullStep;
+           for (let i = -GRID_RADIUS; i <= GRID_RADIUS + 1; i++) {
+               const offset = (i - 0.5) * fullStep;
+               addRoadAxis('z', offset, -mapSize / 2, mapSize / 2, gap);
+               addRoadAxis('x', offset, -mapSize / 2, mapSize / 2, gap);
+           }
+       }
        for (let x = -GRID_RADIUS; x <= GRID_RADIUS; x++) {
            for (let z = -GRID_RADIUS; z <= GRID_RADIUS; z++) {
                const bx = x * fullStep; const bz = z * fullStep; const distFromCenter = Math.max(Math.abs(x), Math.abs(z));
+               occupy(bx, bz, blockSize / 2 + 1); // îlot entier réservé (bâtiment + trottoir)
                if (x === 0 && z === 0) {
                    const park = CityAssets.Layouts.createParkBlock(); park.group.position.set(bx, 0, bz); cityGroup.add(park.group);
                    ctx.animRef.current.pois.push(new THREE.Vector3(bx, 1, bz)); // PARK POI
@@ -456,6 +501,17 @@ export const generateCity = (ctx: CityGenCtx) => {
                 cityGroup.add(v2); ctx.animRef.current.vehiclesList.push(v2);
             }
        }
+       // --- PARCELLES : la première couronne d'îlots vides autour de la grille.
+       // La ville s'étend donc vers l'extérieur, jamais dans les rues existantes.
+       for (const RING of [GRID_RADIUS + 1, GRID_RADIUS + 2]) {
+           for (let x = -RING; x <= RING; x++) {
+               for (let z = -RING; z <= RING; z++) {
+                   if (Math.max(Math.abs(x), Math.abs(z)) !== RING) continue;
+                   addPlot(x * fullStep, z * fullStep, 12, 'Extension');
+               }
+           }
+       }
+       baseRadius = (GRID_RADIUS + 2) * fullStep;
     }
 
     // Merged Mesh Generation
@@ -483,6 +539,9 @@ export const generateCity = (ctx: CityGenCtx) => {
     if(propData.benches.length>0){const g=getCachedGeometry(2,0.1,0.6,'box');const m=new THREE.InstancedMesh(g,getMaterial(CITY_THEME.colors.props.wood,false),propData.benches.length);propData.benches.forEach((d,i)=>m.setMatrixAt(i,d.mat));cityGroup.add(m);}
     if(manholeData.length>0){const g=getCachedGeometry(0.6,0.05,0.6,'cylinder',16);const m=new THREE.InstancedMesh(g,sharedMaterials.manholeMetal,manholeData.length);manholeData.forEach((d,i)=>m.setMatrixAt(i,d.mat));cityGroup.add(m);}
     if(potholeData.length>0){const g=getCachedGeometry(0.6,0.02,0.6,'cylinder',7);const m=new THREE.InstancedMesh(g,sharedMaterials.potholeDark,potholeData.length);potholeData.forEach((d,i)=>m.setMatrixAt(i,d.mat));cityGroup.add(m);}
+
+    setCityRadius(baseRadius);
+    return baseRadius;
 };
 
 

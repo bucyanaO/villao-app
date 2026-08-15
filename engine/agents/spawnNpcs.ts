@@ -11,6 +11,7 @@ import * as THREE from 'three';
 import { CityAssets, InhabitantState, sharedMaterials } from '../assets';
 import type { AnimState } from '../context';
 import type { Persona } from './types';
+import { findOpenGround } from '../world/zoning';
 
 export function spawnAiNpcs(
   cityGroup: THREE.Group,
@@ -19,15 +20,19 @@ export function spawnAiNpcs(
 ): THREE.Group[] {
   const npcs: THREE.Group[] = [];
   for (const persona of personas) {
+    // Le point de la persona est calé sur un sol dégagé du plan courant : selon
+    // le style de ville, sa position théorique peut tomber dans un mur ou sur
+    // la chaussée. Le cadastre nous donne le point libre le plus proche.
+    const spot = findOpenGround(persona.location, 2.5);
     // Walk near their spot (a small bounded patrol) so consultants feel alive,
     // but stay around their location so the player can still find & talk to them.
     const r = 6;
     const bounds = {
-      minX: persona.location.x - r, maxX: persona.location.x + r,
-      minZ: persona.location.z - r, maxZ: persona.location.z + r,
+      minX: spot.x - r, maxX: spot.x + r,
+      minZ: spot.z - r, maxZ: spot.z + r,
     };
     const npc = CityAssets.Life.createInhabitant(InhabitantState.WALKING, bounds);
-    npc.position.set(persona.location.x, 0.2, persona.location.z);
+    npc.position.set(spot.x, 0.2, spot.z);
     npc.rotation.y = Math.random() * Math.PI * 2;
     npc.userData.type = 'ai-agent';
     npc.userData.persona = persona;

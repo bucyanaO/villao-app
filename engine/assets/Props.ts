@@ -102,8 +102,9 @@ export const Props = {
     createHolographicTree: (scale: number = 1, specificColors?: number[]): THREE.Group => {
         const g = new THREE.Group();
         
-        // CUBIC & SPHERICAL GEOMETRY (No more Pyramids/Cones)
-        const isCube = Math.random() > 0.5;
+        // Majoritairement des masses arrondies : en boîtes, l'arbre lisait comme
+        // un gros cube vert translucide posé sur la pelouse.
+        const isCube = Math.random() > 0.78;
         const palette = specificColors || CITY_THEME.colors.props.treeFoliage;
         const foliageColor = palette[Math.floor(Math.random() * palette.length)];
         
@@ -118,15 +119,15 @@ export const Props = {
         let currentY = trunkH * 0.8;
         
         for (let i = 0; i < layers; i++) {
-            const size = (3.0 - i * 0.8) * scale;
+            const size = (2.3 - i * 0.75) * scale;
             const shape = isCube ? 'box' : 'icosahedron';
             // Use wireframe for holographic look
-            const foliage = createWireframeObject(size, size * 0.8, size, foliageColor, 0.25, shape);
+            const foliage = createWireframeObject(size, size * 0.85, size, foliageColor, 0.18, shape);
             
             foliage.position.y = currentY + size/2;
             
             // Random rotation for organic feel even with cubes
-            foliage.rotation.y = Math.random() * Math.PI;
+            foliage.rotation.y = (isCube ? Math.PI / 4 : 0) + Math.random() * Math.PI;
             foliage.rotation.z = (Math.random() - 0.5) * 0.2;
             
             g.add(foliage);
@@ -194,15 +195,26 @@ export const Props = {
         g.add(rod, hub, blades);
         return { group: g, blades: blades };
     },
+    /**
+     * Terrasse en bois : une dalle unique + un rainurage en lignes.
+     * (Avant : une boîte par latte — jusqu'à 45 meshes par terrasse, et un
+     * aplat orange très voyant qui donnait ces « tapis » posés dans l'herbe.)
+     */
     createDeck: (w: number, d: number): THREE.Group => {
         const g = new THREE.Group();
-        // Planks
-        const plankW = 0.2;
-        const num = Math.floor(w / plankW);
-        for(let i=0; i<num; i++) {
-            const p = createSolidObject(plankW-0.02, 0.05, d, getMaterial(CITY_THEME.colors.props.wood, false), 'box');
-            p.position.set(-w/2 + i*plankW + plankW/2, 0.025, 0);
-            g.add(p);
+        const slab = createSolidObject(w, 0.06, d, getMaterial(0x54402f, false), 'box');
+        slab.position.y = 0.03;
+        g.add(slab);
+
+        // rainures : une ligne toutes les 40 cm, discrètes
+        const pts: number[] = [];
+        for (let x = -w / 2 + 0.4; x < w / 2; x += 0.4) {
+            pts.push(x, 0.065, -d / 2, x, 0.065, d / 2);
+        }
+        if (pts.length) {
+            const geo = new THREE.BufferGeometry();
+            geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+            g.add(new THREE.LineSegments(geo, getMaterial(0x4a3222, true)));
         }
         return g;
     }

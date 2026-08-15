@@ -7,8 +7,13 @@ import type { MutableRefObject } from 'react';
 import { CityAssets, InhabitantState } from './assets';
 import type { GodOperation } from './types';
 import type { AnimState } from './context';
+import { resolveBuildSite, findOpenGround, refreshPlotMarkers } from './world/zoning';
+import type { ExpansionManager } from './world/expansion';
 
 export interface GodOpsCtx {
+  /** Le monde persistant : si présent, les constructions y sont INSCRITES
+   *  (elles survivent donc au rechargement au lieu de s'évaporer). */
+  worldRef?: MutableRefObject<ExpansionManager | null>;
   cityGroupRef: MutableRefObject<THREE.Group | null>;
   cameraRef: MutableRefObject<THREE.PerspectiveCamera | null>;
   controlsRef: MutableRefObject<any>; // OrbitControls (loosely typed to avoid a deep three import)
@@ -32,28 +37,45 @@ export const executeGodOperations = (ops: GodOperation[], ctx: GodOpsCtx) => {
         if (op.action === 'BUILD' && op.params?.position) {
              const { position, floors, style, color } = op.params;
              const hexColor = color ? parseInt(color.replace('#','0x')) : 0x00aaff;
+
+             // URBANISME : la position demandée est ramenée sur un terrain légal
+             // (jamais sur la chaussée, jamais sur un bâtiment existant).
+             const site = resolveBuildSite({ x: position.x, z: position.z }, 14);
+             if (!site) return; // plus rien de constructible ici : on n'entasse pas
+
+             // Si le monde persistant est disponible, on passe par lui : le
+             // bâtiment entre au registre et sera rebâti à chaque session.
+             const world = ctx.worldRef?.current;
+             if (world) {
+                 const floorsN = floors || 10;
+                 const kind = floorsN >= 9 ? 'bureau' : floorsN >= 4 ? 'immeuble' : 'maison';
+                 const level = Math.max(1, Math.min(5, Math.round(floorsN / 3)));
+                 world.place(kind, site.x, site.z, Math.atan2(-site.x, -site.z), level, 'God Mode');
+                 return;
+             }
+
              const buildingData = CityAssets.Layouts.createProceduralBuilding(
                  12, 12, floors || 10, style || 'modern', hexColor
              );
-             
+
              const b = buildingData.group;
-             b.position.set(position.x, 0, position.z);
+             b.position.set(site.x, 0, site.z);
              b.userData = { isBuilding: true, expanded: false, isPersistent: true };
-             
+
              // Add to AI persistent group so it survives weather changes
              ctx.aiBuildingsRef.current.add(b);
              ctx.animRef.current.buildingsList.push(b);
-             
-             // Register internals
+
+             // Register internals.
              buildingData.animatedObjects.fans.forEach(f => ctx.animRef.current.fanList.push(f));
              buildingData.animatedObjects.screens.forEach(s => ctx.animRef.current.screenList.push(s));
+             // Les habitants sont des ENFANTS des étages : leurs coordonnées sont
+             // locales. Y ajouter la position du bâtiment les projetait dehors,
+             // en l'air (« personnages qui flottent »). On ne touche donc à rien.
              buildingData.inhabitants.forEach(i => {
-                 // Need to offset inhabitant positions by building position
-                 i.position.add(b.position);
-                 // Add to main scene just in case, but usually they are children of building
-                 // Actually they are children of building group, so no need to re-add to scene
-                 ctx.animRef.current.inhabitantsList.push(i); 
+                 ctx.animRef.current.inhabitantsList.push(i);
              });
+             if (ctx.cityGroupRef.current) refreshPlotMarkers(ctx.cityGroupRef.current);
              return;
         }
 
@@ -100,6 +122,12 @@ export const executeGodOperations = (ops: GodOperation[], ctx: GodOpsCtx) => {
             }
 
             if (obj) {
+                // Arbres, statues et passants : posés sur un sol dégagé, pas au
+                // milieu d'une voie ni dans un mur.
+                if (op.params.type !== 'car' && (pos.y ?? 0) < 1) {
+                    const g = findOpenGround({ x: pos.x, z: pos.z }, op.params.type === 'person' ? 1.5 : 3);
+                    pos.x = g.x; pos.z = g.z;
+                }
                 obj.position.set(pos.x, pos.y, pos.z);
                 if (scale !== 1) obj.scale.setScalar(scale);
                 // Override color if provided and not handled by factory

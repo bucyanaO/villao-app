@@ -30,6 +30,15 @@ import { drawLotMarkers } from '../engine/agents/lots';
 import { AI_PERSONAS } from '../engine/agents/personas';
 import type { Persona } from '../engine/agents/types';
 import { createAutonomyTicker } from '../engine/agents/autonomy';
+import { createExpansionManager } from '../engine/world/expansion';
+import type { ExpansionManager } from '../engine/world/expansion';
+import { createStudio } from '../engine/agents/studio';
+import { createTerrain } from '../engine/world/terrain';
+import type { Terrain } from '../engine/world/terrain';
+import { save as saveLedger } from '../engine/world/ledger';
+import { createHaze } from '../engine/world/haze';
+import type { Haze } from '../engine/world/haze';
+import type { Studio, StudioEvent, Architect } from '../engine/agents/studio';
 
 const VoxelCityScene: React.FC<{ 
     lightingPreset?: number, 
@@ -41,8 +50,10 @@ const VoxelCityScene: React.FC<{
     aiCommand?: AICommand | null,
     setInteractionLabel?: (label: string | null) => void,
     setIsDriving?: (isDriving: boolean) => void,
-    onTalkToAgent?: (persona: Persona) => void
-}> = ({ 
+    onTalkToAgent?: (persona: Persona) => void,
+    /** Journal du cabinet d'architectes (constructions, promotions, rues ouvertes) */
+    onStudioEvent?: (e: StudioEvent, roster?: Architect[]) => void
+}> = ({
     lightingPreset = 0, 
     fogLevel = 1.0, 
     architecturalStyle = 'mixed',
@@ -52,7 +63,8 @@ const VoxelCityScene: React.FC<{
     aiCommand = null,
     setInteractionLabel,
     setIsDriving,
-    onTalkToAgent
+    onTalkToAgent,
+    onStudioEvent
 }) => {
     const mountRef = useRef<HTMLDivElement>(null);
     
@@ -91,6 +103,17 @@ const VoxelCityScene: React.FC<{
     const sunRef = useRef<THREE.Mesh | null>(null);
     const cityGroupRef = useRef<THREE.Group | null>(null);
     const aiBuildingsRef = useRef<THREE.Group>(new THREE.Group()); // Persistent buildings added by AI
+    // La ville qui s'étend + la forêt qui recule (engine/world/expansion.ts)
+    const expansionRef = useRef<ExpansionManager | null>(null);
+    const expansionClockRef = useRef(0);
+    // Le cabinet d'architectes autonome (engine/agents/studio.ts)
+    const studioRef = useRef<Studio | null>(null);
+    // Les projets propres des habitants (engine/agents/autonomy.ts)
+    const autonomyRef = useRef<{ start(): void; stop(): void } | null>(null);
+    // Sol + forêt infinis, et brume volumétrique qui mange le lointain
+    const terrainRef = useRef<Terrain | null>(null);
+    const hazeRef = useRef<Haze | null>(null);
+    const terrainClockRef = useRef(0);
     
     // Weather System Refs
     const weatherSystemRef = useRef<THREE.Points | null>(null);
@@ -187,7 +210,7 @@ const VoxelCityScene: React.FC<{
 
             // God Mode Operations (Execute Once)
             if (aiCommand.godOperations && aiCommand.godOperations.length > 0) {
-                executeGodOperations(aiCommand.godOperations, { cityGroupRef, cameraRef, controlsRef, aiBuildingsRef, animRef } satisfies GodOpsCtx);
+                executeGodOperations(aiCommand.godOperations, { worldRef: expansionRef, cityGroupRef, cameraRef, controlsRef, aiBuildingsRef, animRef } satisfies GodOpsCtx);
             }
 
             // Summon a vehicle that drives to the player, then waits to be entered (F).
@@ -219,9 +242,18 @@ const VoxelCityScene: React.FC<{
         scene.background = new THREE.Color(0x87CEEB);
         
         // Camera
-        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000); 
+        // far augmenté : la ville s'étend et la forêt/les collines sont loin
+        const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 4000);
         camera.position.set(60, 60, 60);
         cameraRef.current = camera;
+
+        // Debug/repérage : ?cam=x,y,z (&look=x,y,z) place la caméra au chargement.
+        const camParam = new URLSearchParams(window.location.search).get('cam');
+        const lookParam = new URLSearchParams(window.location.search).get('look');
+        if (camParam) {
+            const [cx, cy, cz] = camParam.split(',').map(Number);
+            if ([cx, cy, cz].every((n) => Number.isFinite(n))) camera.position.set(cx, cy, cz);
+        }
         
         // Renderer
         // IMPORTANT: preserveDrawingBuffer: true is required for canvas.toDataURL() to work for Gemini screenshots
@@ -241,13 +273,23 @@ const VoxelCityScene: React.FC<{
         controls.enableDamping = true; 
         controls.dampingFactor = 0.05; 
         controls.maxPolarAngle = Math.PI / 2 - 0.05; 
-        controls.minDistance = 10; 
-        controls.maxDistance = 400;
+        controls.minDistance = 10;
+        controls.maxDistance = 1200; // on doit pouvoir prendre du recul sur la ville étendue
+        if (lookParam) {
+            const [lx, ly, lz] = lookParam.split(',').map(Number);
+            if ([lx, ly, lz].every((n) => Number.isFinite(n))) { controls.target.set(lx, ly, lz); camera.lookAt(lx, ly, lz); }
+        }
         controlsRef.current = controls;
 
         // FPS Controls
         const fpsControls = new PointerLockControls(camera, renderer.domElement);
         controlsFPSRef.current = fpsControls;
+
+        // Monde sans bord : le sol et la forêt sont engendrés autour du joueur,
+        // et la brume volumétrique dissout la frontière de génération.
+        terrainRef.current = createTerrain(scene);
+        terrainRef.current.update({ x: camera.position.x, z: camera.position.z });
+        hazeRef.current = createHaze(scene);
         
         // Base Environment
         const initialP = presets[0];
@@ -469,6 +511,11 @@ const VoxelCityScene: React.FC<{
             rendererRef.current.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
         };
         window.addEventListener('resize', hR);
+        // le registre de la ville est écrit avant de quitter la page :
+        // rien de ce qui a été construit ne doit disparaître
+        const flush = () => saveLedger();
+        window.addEventListener('pagehide', flush);
+        window.addEventListener('beforeunload', flush);
 
         // Animation Loop
         const fr = new THREE.Frustum(); const pm = new THREE.Matrix4(); const v3 = new THREE.Vector3();
@@ -490,6 +537,28 @@ const VoxelCityScene: React.FC<{
             // Update Time
             const d = clockRef.current.getDelta() * timeScale;
             const time = clockRef.current.getElapsedTime() * timeScale;
+
+            // --- SOL / FORÊT INFINIS + BRUME (le lointain ne doit jamais finir) ---
+            hazeRef.current?.update(cameraRef.current, time);
+            terrainClockRef.current += d;
+            if (terrainClockRef.current > 0.6 && terrainRef.current) {
+                terrainClockRef.current = 0;
+                const p = walkModeRef.current || vehicleRef.current.current
+                    ? cameraRef.current.position
+                    : (controlsRef.current ? controlsRef.current.target : cameraRef.current.position);
+                terrainRef.current.update({ x: p.x, z: p.z });
+            }
+
+            // --- LA VILLE S'ÉTEND DEVANT LE JOUEUR (1 test/s, coût négligeable) ---
+            expansionClockRef.current += d;
+            if (expansionClockRef.current > 1 && expansionRef.current) {
+                expansionClockRef.current = 0;
+                // en marche/conduite on suit le joueur, en orbite on suit le point observé
+                const focus = walkModeRef.current || vehicleRef.current.current
+                    ? cameraRef.current.position
+                    : (controlsRef.current ? controlsRef.current.target : cameraRef.current.position);
+                expansionRef.current.update(focus as THREE.Vector3);
+            }
 
             // --- GAMEPAD POLLING ---
             const gamepads = navigator.getGamepads ? navigator.getGamepads() : [];
@@ -1005,6 +1074,25 @@ const VoxelCityScene: React.FC<{
                     else if (l.dir === -1 && v.position.z > l.limitZMin) { if (v.position.z > l.limitZMax - 5) v.position.z = l.limitZMin; }
                     return;
                 }
+                // --- VOIE DE QUARTIER : va-et-vient le long de la rue du quartier
+                if (v.userData.districtLane) {
+                    const l = v.userData.districtLane;
+                    const dx = l.bx - l.ax, dz = l.bz - l.az;
+                    const len = Math.hypot(dx, dz) || 1;
+                    const ux = dx / len, uz = dz / len;
+                    const mv = (v.userData.speed || 5) * d * trafficMult * l.dir;
+                    v.position.x += ux * mv;
+                    v.position.z += uz * mv;
+                    // projection sur le segment : demi-tour aux extrémités
+                    const t = (v.position.x - l.ax) * ux + (v.position.z - l.az) * uz;
+                    if (t < 6 || t > len - 6) {
+                        l.dir *= -1;
+                        v.rotation.y = l.angle + (l.dir === 1 ? 0 : Math.PI);
+                    }
+                    if (gravity === 1.0) v.position.y = 0.1;
+                    return;
+                }
+
                 // If God Mode removed lane logic, don't move along lanes
                 if (!v.userData.lane) return;
 
@@ -1313,18 +1401,16 @@ const VoxelCityScene: React.FC<{
         };
         animate();
 
-        // Autonomous AI agents: each persona slowly builds one thing near it.
-        // Scripted for now (no LLM needed); swap `decide()` for callAgent later.
-        const autonomy = createAutonomyTicker(
-            { cityGroupRef, cameraRef, controlsRef, aiBuildingsRef, animRef, personas: AI_PERSONAS },
-            { intervalMs: 15000, initialDelayMs: 6000 }
-        );
-        autonomy.start();
-
         return () => {
-            autonomy.stop();
+            autonomyRef.current?.stop();
+            studioRef.current?.stop();
+            saveLedger();
+            terrainRef.current?.dispose();
+            hazeRef.current?.dispose();
             if (requestRef.current) cancelAnimationFrame(requestRef.current);
             window.removeEventListener('resize', hR);
+            window.removeEventListener('pagehide', flush);
+            window.removeEventListener('beforeunload', flush);
             document.removeEventListener('keydown', onKeyDown);
             document.removeEventListener('keyup', onKeyUp);
             if (rendererRef.current && rendererRef.current.domElement) {
@@ -1339,7 +1425,13 @@ const VoxelCityScene: React.FC<{
     // --- 2. LIGHTING & WEATHER UPDATE ---
     useEffect(() => {
         const p = presets[lightingPreset] || presets[0];
-        if (fogRef.current) { fogRef.current.color.setHex(p.fog); fogRef.current.density = p.dens * fogLevel; }
+        if (fogRef.current) {
+            fogRef.current.color.setHex(p.fog);
+            // plancher de densité : le brouillard doit toujours masquer la
+            // frontière de génération (~430 m), sinon on verrait le monde apparaître
+            fogRef.current.density = Math.max(0.0085, p.dens * fogLevel);
+        }
+        hazeRef.current?.tune(p.fog, Math.max(0.0085, p.dens * fogLevel), p.night);
         if (ambientLightRef.current) ambientLightRef.current.intensity = p.amb;
         if (dirLightRef.current) { dirLightRef.current.intensity = p.dir; dirLightRef.current.color.setHex(p.dirC); }
         if (skyMaterialRef.current) {
@@ -1423,9 +1515,63 @@ const VoxelCityScene: React.FC<{
     useEffect(() => {
         if (!cityGroupRef.current) return;
         
-        generateCity({ cityGroup: cityGroupRef.current, architecturalStyle, animRef, fxRefs });
+        const baseRadius = generateCity({ cityGroup: cityGroupRef.current, architecturalStyle, animRef, fxRefs });
         spawnAiNpcs(cityGroupRef.current, animRef, AI_PERSONAS);
         drawLotMarkers(cityGroupRef.current);
+
+        // La ville repart de son noyau, puis le registre rejoue TOUT ce qui a
+        // déjà été construit (rien ne disparaît au démarrage), et de nouveaux
+        // quartiers naîtront quand on s'approchera de la frontière.
+        if (!expansionRef.current) {
+            expansionRef.current = createExpansionManager({
+                cityGroup: cityGroupRef.current,
+                animRef,
+                onDistrict: (label, n) => {
+                    console.info(`[ville] nouveau quartier #${n} : ${label}`);
+                    onStudioEvent?.({ t: Date.now(), text: `Nouveau quartier : ${label}` });
+                },
+                onBuilding: (label, by) => console.info(`[ville] ${by} livre ${label}`),
+                onGroundChanged: (x, z, r) => terrainRef.current?.invalidate(x, z, r),
+            });
+        }
+        expansionRef.current.reset(baseRadius, architecturalStyle);
+
+        // Le sol/la forêt sont resemés MAINTENANT que le cadastre de la nouvelle
+        // ville existe : sinon les arbres pousseraient au milieu des rues.
+        if (terrainRef.current && cameraRef.current) {
+            terrainRef.current.dispose();
+            terrainRef.current.update({ x: cameraRef.current.position.x, z: cameraRef.current.position.z });
+        }
+
+        // Le cabinet d'architectes : il construit en continu, apprend, et trace
+        // de nouvelles rues quand le foncier est épuisé.
+        if (!studioRef.current) {
+            studioRef.current = createStudio({
+                world: expansionRef.current,
+                cityGroup: cityGroupRef.current,
+                playerPos: () => (walkModeRef.current || vehicleRef.current.current
+                    ? (cameraRef.current?.position ?? new THREE.Vector3())
+                    : (controlsRef.current?.target ?? new THREE.Vector3())),
+                onEvent: (e) => {
+                    console.info(`[atelier] ${e.text}`);
+                    onStudioEvent?.(e, studioRef.current?.roster());
+                },
+            });
+            studioRef.current.start();
+        }
+
+        // Les habitants, eux, bâtissent LEUR projet (boulangerie, clinique…)
+        if (!autonomyRef.current) {
+            autonomyRef.current = createAutonomyTicker(
+                {
+                    world: expansionRef.current,
+                    personas: AI_PERSONAS,
+                    onEvent: (text) => { console.info(`[habitants] ${text}`); onStudioEvent?.({ t: Date.now(), text }); },
+                },
+                { intervalMs: 30000, initialDelayMs: 12000 },
+            );
+            autonomyRef.current.start();
+        }
 
     }, [architecturalStyle]);
     
