@@ -28,11 +28,26 @@ interface ZoningState {
   occupied: Footprint[];
   plots: Plot[];
   keys: Set<string>;
+  /** Index spatial : sans lui, chaque question au cadastre coûterait de plus en
+   *  plus cher à mesure que la ville s'étend — et un monde infini deviendrait
+   *  vite injouable. */
+  roadCells: Map<string, RoadSeg[]>;
+  occCells: Map<string, Footprint[]>;
+  maxRoadW: number;
+  maxFootR: number;
   /** Rayon urbanisé actuel (utilisé par la forêt et l'expansion). */
   cityRadius: number;
 }
 
-const Z: ZoningState = { style: '', roads: [], occupied: [], plots: [], keys: new Set(), cityRadius: 60 };
+/** Côté d'une cellule d'index (m). */
+const CELL = 64;
+const HALF_DIAG = CELL * Math.SQRT1_2;
+
+const Z: ZoningState = {
+  style: '', roads: [], occupied: [], plots: [], keys: new Set(),
+  roadCells: new Map(), occCells: new Map(), maxRoadW: 0, maxFootR: 0,
+  cityRadius: 60,
+};
 
 export function resetZoning(style: string, cityRadius = 60): void {
   Z.style = style;
@@ -40,7 +55,21 @@ export function resetZoning(style: string, cityRadius = 60): void {
   Z.occupied = [];
   Z.plots = [];
   Z.keys.clear();
+  Z.roadCells.clear();
+  Z.occCells.clear();
+  Z.maxRoadW = 0;
+  Z.maxFootR = 0;
   Z.cityRadius = cityRadius;
+}
+
+const cellKey = (i: number, j: number) => `${i},${j}`;
+const cellIndex = (v: number) => Math.floor(v / CELL);
+
+/** Parcourt les cellules d'une boîte autour d'un point. */
+function forEachCell(x: number, z: number, reach: number, fn: (key: string) => void): void {
+  const i0 = cellIndex(x - reach), i1 = cellIndex(x + reach);
+  const j0 = cellIndex(z - reach), j1 = cellIndex(z + reach);
+  for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) fn(cellKey(i, j));
 }
 
 export function zoningStyle(): string { return Z.style; }
@@ -71,6 +100,20 @@ export function addRoad(x1: number, z1: number, x2: number, z2: number, w: numbe
   if (!once(k('r', x1, z1, x2, z2, w))) return;
   const seg: RoadSeg = { x1, z1, x2, z2, w, owner };
   Z.roads.push(seg);
+  Z.maxRoadW = Math.max(Z.maxRoadW, w);
+  // index : toute cellule dont le centre est à portée du tronçon
+  const minX = Math.min(x1, x2), maxX = Math.max(x1, x2);
+  const minZ = Math.min(z1, z2), maxZ = Math.max(z1, z2);
+  const reach = w / 2 + HALF_DIAG;
+  for (let i = cellIndex(minX - reach); i <= cellIndex(maxX + reach); i++) {
+    for (let j = cellIndex(minZ - reach); j <= cellIndex(maxZ + reach); j++) {
+      const cx = i * CELL + CELL / 2, cz = j * CELL + CELL / 2;
+      if (distToSeg(cx, cz, seg) > reach) continue;
+      const k2 = cellKey(i, j);
+      const list = Z.roadCells.get(k2);
+      if (list) list.push(seg); else Z.roadCells.set(k2, [seg]);
+    }
+  }
   // Une voie nouvelle peut traverser des parcelles déjà ouvertes : on les
   // déclasse immédiatement. Sinon on bâtirait, plus tard, en pleine chaussée.
   for (const p of Z.plots) {
@@ -97,7 +140,13 @@ export function addRoadRing(cx: number, cz: number, radius: number, w: number, s
 /** Marque une empreinte occupée (bâtiment, parc, place, statue…). */
 export function occupy(x: number, z: number, r: number, owner?: number): void {
   if (!once(k('o', owner ?? 0, x, z, r))) return;
-  Z.occupied.push({ x, z, r, owner });
+  const f: Footprint = { x, z, r, owner };
+  Z.occupied.push(f);
+  Z.maxFootR = Math.max(Z.maxFootR, r);
+  forEachCell(x, z, r + HALF_DIAG, (key) => {
+    const list = Z.occCells.get(key);
+    if (list) list.push(f); else Z.occCells.set(key, [f]);
+  });
 }
 
 /** Déclare une parcelle constructible (si elle est légale). */
@@ -113,10 +162,28 @@ export function addPlot(x: number, z: number, size = 13, district = 'centre'): b
 
 /** Vrai si (x,z) est sur la chaussée (avec une marge de sécurité). */
 export function isOnRoad(x: number, z: number, margin = 0): boolean {
-  for (const s of Z.roads) {
-    if (distToSeg(x, z, s) < s.w / 2 + margin) return true;
-  }
-  return false;
+  let hit = false;
+  forEachCell(x, z, margin + Z.maxRoadW / 2, (key) => {
+    if (hit) return;
+    const list = Z.roadCells.get(key);
+    if (!list) return;
+    for (const s of list) {
+      if (distToSeg(x, z, s) < s.w / 2 + margin) { hit = true; return; }
+    }
+  });
+  return hit;
+}
+
+/** Empreintes susceptibles de toucher un disque donné (via l'index). */
+function occupiedNear(x: number, z: number, reach: number): Footprint[] {
+  const out: Footprint[] = [];
+  const seen = new Set<Footprint>();
+  forEachCell(x, z, reach + Z.maxFootR, (key) => {
+    const list = Z.occCells.get(key);
+    if (!list) return;
+    for (const f of list) if (!seen.has(f)) { seen.add(f); out.push(f); }
+  });
+  return out;
 }
 
 /**
@@ -127,7 +194,7 @@ export function isOnRoad(x: number, z: number, margin = 0): boolean {
 export function isBuildable(x: number, z: number, size = 13, ignoreOwner?: number): boolean {
   const half = size / 2;
   if (isOnRoad(x, z, half + 1.5)) return false;
-  for (const f of Z.occupied) {
+  for (const f of occupiedNear(x, z, half)) {
     if (ignoreOwner !== undefined && f.owner === ignoreOwner) continue;
     if (Math.hypot(x - f.x, z - f.z) < f.r + half) return false;
   }
@@ -204,10 +271,16 @@ export function resolveBuildSite(desired: { x: number; z: number }, size = 13, o
 /** Les tronçons de voirie proches d'un point (pour bâtir « sur rue »). */
 export function roadsNear(p: { x: number; z: number }, radius: number): RoadSeg[] {
   const out: RoadSeg[] = [];
-  for (const s of Z.roads) {
-    // test grossier : distance au segment, avec sa longueur en tolérance
-    if (distToSeg(p.x, p.z, s) < radius) out.push(s);
-  }
+  const seen = new Set<RoadSeg>();
+  forEachCell(p.x, p.z, radius, (key) => {
+    const list = Z.roadCells.get(key);
+    if (!list) return;
+    for (const s of list) {
+      if (seen.has(s)) continue;
+      seen.add(s);
+      if (distToSeg(p.x, p.z, s) < radius) out.push(s);
+    }
+  });
   return out;
 }
 
@@ -220,7 +293,7 @@ export function roadsNear(p: { x: number; z: number }, radius: number): RoadSeg[
  */
 export function roadEndpointsNear(p: { x: number; z: number }, radius: number): { x: number; z: number; angle: number }[] {
   const out: { x: number; z: number; angle: number }[] = [];
-  for (const s of Z.roads) {
+  for (const s of roadsNear(p, radius + 40)) {
     const angle = Math.atan2(s.x2 - s.x1, s.z2 - s.z1);
     if (Math.hypot(s.x1 - p.x, s.z1 - p.z) < radius) out.push({ x: s.x1, z: s.z1, angle: angle + Math.PI });
     if (Math.hypot(s.x2 - p.x, s.z2 - p.z) < radius) out.push({ x: s.x2, z: s.z2, angle });
@@ -231,7 +304,9 @@ export function roadEndpointsNear(p: { x: number; z: number }, radius: number): 
 /** Le point est-il dégagé (ni bâti, ni chaussée) avec cette marge ? */
 export function isClear(x: number, z: number, clearance = 2.5): boolean {
   if (isOnRoad(x, z, clearance)) return false;
-  for (const f of Z.occupied) if (Math.hypot(x - f.x, z - f.z) < f.r + clearance) return false;
+  for (const f of occupiedNear(x, z, clearance)) {
+    if (Math.hypot(x - f.x, z - f.z) < f.r + clearance) return false;
+  }
   return true;
 }
 
@@ -240,10 +315,10 @@ export function isClear(x: number, z: number, clearance = 2.5): boolean {
  * Une rue nouvelle part TOUJOURS d'une rue existante : c'est ce qui garantit
  * qu'on obtient un réseau connecté et pas des tronçons orphelins.
  */
-export function nearestRoadPoint(p: { x: number; z: number }): { x: number; z: number; angle: number } | null {
+export function nearestRoadPoint(p: { x: number; z: number }, searchRadius = 400): { x: number; z: number; angle: number } | null {
   let best: { x: number; z: number; angle: number } | null = null;
   let bestD = Infinity;
-  for (const s of Z.roads) {
+  for (const s of roadsNear(p, searchRadius)) {
     const dx = s.x2 - s.x1, dz = s.z2 - s.z1;
     const l2 = dx * dx + dz * dz;
     let t = l2 > 0 ? ((p.x - s.x1) * dx + (p.z - s.z1) * dz) / l2 : 0;
@@ -257,11 +332,7 @@ export function nearestRoadPoint(p: { x: number; z: number }): { x: number; z: n
 
 /** Point au sol libre le plus proche (pour poser un PNJ sans le mettre dans un mur). */
 export function findOpenGround(desired: { x: number; z: number }, clearance = 2.5): { x: number; z: number } {
-  const free = (x: number, z: number) => {
-    if (isOnRoad(x, z, clearance)) return false;
-    for (const f of Z.occupied) if (Math.hypot(x - f.x, z - f.z) < f.r + clearance) return false;
-    return true;
-  };
+  const free = (x: number, z: number) => isClear(x, z, clearance);
   if (free(desired.x, desired.z)) return { x: desired.x, z: desired.z };
   for (let ring = 1; ring <= 12; ring++) {
     const r = ring * 3;

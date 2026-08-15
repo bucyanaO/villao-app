@@ -19,13 +19,33 @@ import * as THREE from 'three';
 const proxyGeo = new THREE.BoxGeometry(1, 1, 1);
 const proxyEdges = new THREE.EdgesGeometry(proxyGeo);
 
+/**
+ * Nervures horizontales de la silhouette : sept ceintures régulières qui
+ * suggèrent les niveaux. Sans elles, une tour lointaine n'est qu'un bloc de
+ * couleur ; avec, elle reste lisible comme un bâtiment.
+ */
+const proxyFloors = (() => {
+  const pts: number[] = [];
+  for (let i = 1; i <= 7; i++) {
+    const y = -0.5 + i / 8;
+    const c: [number, number][] = [[-0.5, -0.5], [0.5, -0.5], [0.5, 0.5], [-0.5, 0.5]];
+    for (let k = 0; k < 4; k++) {
+      const a = c[k], b = c[(k + 1) % 4];
+      pts.push(a[0], y, a[1], b[0], y, b[1]);
+    }
+  }
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
+  return g;
+})();
+
 const fillCache = new Map<number, THREE.Material>();
 const lineCache = new Map<number, THREE.Material>();
 
 function fillMat(color: number): THREE.Material {
   let m = fillCache.get(color);
   if (!m) {
-    m = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.82, depthWrite: true });
+    m = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.4, depthWrite: true });
     fillCache.set(color, m);
   }
   return m;
@@ -91,6 +111,11 @@ export function attachLod(building: THREE.Object3D): void {
   const edges = new THREE.LineSegments(proxyEdges, lineMat(color));
   edges.scale.copy(size);
   proxy.add(edges);
+  if (size.y > 9) {
+    const floors = new THREE.LineSegments(proxyFloors, lineMat(color));
+    floors.scale.copy(size);
+    proxy.add(floors);
+  }
 
   // le proxy est un frère du bâtiment, exprimé dans le même repère
   const local = building.parent.worldToLocal(center.clone());
