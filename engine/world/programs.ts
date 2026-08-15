@@ -97,6 +97,28 @@ const NAMES: Record<string, string[]> = {
 
 const emptyAnimated = () => ({ fans: [] as THREE.Group[], screens: [] as THREE.Mesh[] });
 
+/**
+ * Bandeau de fenêtres allumées sur une façade.
+ *
+ * Le matériau `lampLight` s'éteint le jour et brille la nuit (cf. le préréglage
+ * d'éclairage) : une seule instance par façade suffit à faire vivre le bâti
+ * nocturne, sans coût de rendu notable.
+ */
+function litWindows(width: number, y: number, z: number, count: number, rng: Rng): THREE.InstancedMesh {
+  const geo = new THREE.PlaneGeometry(0.9, 1.1);
+  const im = new THREE.InstancedMesh(geo, sharedMaterials.lampLight, count);
+  const dummy = new THREE.Object3D();
+  const step = width / (count + 1);
+  for (let i = 0; i < count; i++) {
+    dummy.position.set(-width / 2 + step * (i + 1), y + rng.range(-0.15, 0.15), z);
+    dummy.rotation.set(0, 0, 0);
+    dummy.updateMatrix();
+    im.setMatrixAt(i, dummy.matrix);
+  }
+  im.instanceMatrix.needsUpdate = true;
+  return im;
+}
+
 /** Volume filaire standard (mêmes codes visuels que le reste de la ville). */
 const box = (w: number, h: number, d: number, color: number, opacity = 0.5) =>
   CityAssets.primitives.createWireframeObject(w, h, d, color, opacity, 'box');
@@ -129,6 +151,11 @@ function maison(rng: Rng, level: number): BuiltProgram {
     pan.rotation.z = -s * slope;
     g.add(pan);
   }
+  // fenêtres éclairées : la maison vit aussi la nuit
+  for (let i = 0; i < floors; i++) {
+    g.add(litWindows(w - 2, i * fh + fh * 0.55, d / 2 + 0.06, 2, rng));
+  }
+
   // entrée + jardin
   const path = CityAssets.primitives.createSolidObject(1.6, 0.08, 4, sharedMaterials.sidewalkConcrete, 'box');
   path.position.set(0, 0.05, d / 2 + 2); g.add(path);
@@ -390,6 +417,10 @@ function equipement(kind: 'ecole' | 'clinique' | 'mairie', rng: Rng, level: numb
     const body = box(w, fh, d, wall, 0.6);
     body.position.y = i * fh + fh / 2; g.add(body);
   }
+  for (let i = 0; i < floors; i++) {
+    g.add(litWindows(w - 3, i * fh + fh * 0.55, d / 2 + 0.06, 4, rng));
+  }
+
   // portique d'entrée à colonnes : ça se lit tout de suite comme un équipement
   const cols = 4;
   for (let i = 0; i < cols; i++) {
@@ -552,6 +583,7 @@ function banque(rng: Rng, level: number): BuiltProgram {
     const col = CityAssets.primitives.createWireframeObject(0.8, h, 0.8, 0xefe9dc, 0.95, 'cylinder');
     col.position.set(-4.5 + i * 3, h / 2, d / 2 + 1.4); g.add(col);
   }
+  g.add(litWindows(w - 3, h * 0.55, d / 2 + 0.06, 4, rng));
   const fronton = CityAssets.primitives.createSolidObject(w, 1.2, 3.4, getMaterial(0xefe9dc, false), 'box');
   fronton.position.set(0, h + 0.6, d / 2 + 1.2); g.add(fronton);
   const sign = makeSign(rng.pick(NAMES.banque), 8, '#1b2a3a', 'rgba(240,236,225,0.95)');
@@ -600,6 +632,7 @@ function bibliotheque(rng: Rng, level: number): BuiltProgram {
     const bay = box(2.4, h - 2, 0.2, CITY_THEME.colors.buildings.glass, 0.3);
     bay.position.set(-6 + i * 4, h / 2, d / 2); g.add(bay);
   }
+  g.add(litWindows(w - 3, h * 0.6, d / 2 + 0.12, 4, rng));
   for (let i = 0; i < 4 + level; i++) {
     const stack = box(w - 4, 2.2, 0.7, 0x6b5a45, 0.8);
     stack.position.set(0, 1.1, -d / 2 + 1.6 + i * 1.6); g.add(stack);
@@ -690,6 +723,7 @@ function caserne(rng: Rng, level: number, police = false): BuiltProgram {
     const door = box(4, 4.2, 0.3, 0x101418, 0.9);
     door.position.set(-w / 2 + 3 + i * 5, 2.1, d / 2 + 0.2); g.add(door);
   }
+  g.add(litWindows(w - 4, h * 0.7, d / 2 + 0.06, 4, rng));
   const tour = box(3, h + 5, 3, wall, 0.8);
   tour.position.set(w / 2 - 2, (h + 5) / 2, -d / 2 + 2); g.add(tour);
   const gyro = CityAssets.primitives.createSolidObject(1.2, 0.4, 1.2, getMaterial(police ? 0x3388ff : 0xff3322, false), 'box');
@@ -711,6 +745,7 @@ function poste(rng: Rng, level: number): BuiltProgram {
   const w = 12, d = 10, h = 5;
   const body = box(w, h, d, rng.pick([0xe8c840, 0xefd35a, 0xdcbe33]), 0.6);
   body.position.y = h / 2; g.add(body);
+  g.add(litWindows(w - 3, h * 0.45, d / 2 + 0.06, 3, rng));
   const band = CityAssets.primitives.createSolidObject(w + 0.3, 0.7, d + 0.3, getMaterial(0x1b3fa0, false), 'box');
   band.position.y = h - 1; g.add(band);
   const sign = makeSign(NAMES.poste[0], 7, '#ffffff', 'rgba(27,63,160,0.95)');
