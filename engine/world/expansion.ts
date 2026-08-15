@@ -62,7 +62,6 @@ const LOAD_RADIUS = 430;     // au-delà, un acte n'est plus matérialisé…
 const UNLOAD_RADIUS = 620;   // …et on ne le retire qu'un peu plus loin (hystérésis)
 
 export function createExpansionManager(ctx: ExpansionCtx): ExpansionManager {
-  let baseRadius = 60;
   let nextTheme = 0;
   let anchors: { x: number; z: number }[] = [{ x: 0, z: 0 }];
   const loaded = new Map<number, THREE.Object3D>();
@@ -274,7 +273,6 @@ export function createExpansionManager(ctx: ExpansionCtx): ExpansionManager {
     reset(radius: number, style: string, cityAnchors?: { x: number; z: number }[]) {
       // on repart du noyau : plus rien de matérialisé, le registre reprend la main
       for (const id of [...loaded.keys()]) dematerialize(id);
-      baseRadius = radius;
       nextTheme = 0;
       anchors = [{ x: 0, z: 0 }, ...(cityAnchors ?? [])];
       plans.clear();

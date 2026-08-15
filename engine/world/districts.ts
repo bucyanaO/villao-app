@@ -14,7 +14,7 @@
  */
 import * as THREE from 'three';
 import { CITY_THEME } from '../theme';
-import { CityAssets, InhabitantState, sharedMaterials, getMaterial } from '../assets';
+import { CityAssets, InhabitantState, sharedMaterials } from '../assets';
 import type { AnimState } from '../context';
 import { occupy, addPlot, isBuildable, addRoad } from './zoning';
 import { paveStreet } from './streets';

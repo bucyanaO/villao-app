@@ -709,7 +709,8 @@ function poste(rng: Rng, level: number): BuiltProgram {
   const g = new THREE.Group();
   const inhabitants: THREE.Group[] = [];
   const w = 12, d = 10, h = 5;
-  const body = box(w, h, d, 0xe8c840, 0.6); body.position.y = h / 2; g.add(body);
+  const body = box(w, h, d, rng.pick([0xe8c840, 0xefd35a, 0xdcbe33]), 0.6);
+  body.position.y = h / 2; g.add(body);
   const band = CityAssets.primitives.createSolidObject(w + 0.3, 0.7, d + 0.3, getMaterial(0x1b3fa0, false), 'box');
   band.position.y = h - 1; g.add(band);
   const sign = makeSign(NAMES.poste[0], 7, '#ffffff', 'rgba(27,63,160,0.95)');
@@ -866,7 +867,9 @@ function stationService(rng: Rng, level: number): BuiltProgram {
   for (const [x, z] of [[-6, -3.5], [6, -3.5], [-6, 3.5], [6, 3.5]]) {
     const col = box(0.5, 5, 0.5, 0xd0d0d0, 0.9); col.position.set(x, 2.5, z); g.add(col);
   }
-  for (const x of [-3, 3]) {
+  // plus la station est cotée, plus elle a de pistes
+  const pumps = level >= 4 ? [-5, -1.5, 2, 5.5] : level >= 2 ? [-3, 0, 3] : [-3, 3];
+  for (const x of pumps) {
     const pump = box(1, 1.8, 0.8, 0x2f7f5f, 0.9); pump.position.set(x, 0.9, 0); g.add(pump);
   }
   const shop = box(8, 3.4, 6, 0xe8e8e8, 0.65); shop.position.set(0, 1.7, -9); g.add(shop);
@@ -882,7 +885,7 @@ function stationService(rng: Rng, level: number): BuiltProgram {
 
 function telecom(rng: Rng, level: number): BuiltProgram {
   const g = new THREE.Group();
-  const h = 22 + level * 4;
+  const h = 22 + level * 4 + rng.range(-3, 5);
   // pylône treillis : quatre montants + entretoises
   for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
     const leg = box(0.3, h, 0.3, 0xb8bec4, 0.9);
