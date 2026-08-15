@@ -4,10 +4,25 @@
 import * as THREE from 'three';
 import { InhabitantState, InstanceData } from './types';
 import { getMaterial } from './materials';
+import { sharedMaterials } from './materials';
 import { createWireframeObject, createSolidObject } from './primitives';
 import { Props } from './Props';
 import { Life } from './Life';
 import { RoomAssembler, Architecture, Furniture } from './interiors';
+
+/** Lit windows on a floor box — a modern "2026" accent on procedural buildings. */
+const addWindows = (box: THREE.Group, w: number, d: number, fh: number) => {
+  const cols = Math.min(4, Math.max(2, Math.floor(w / 2.5)));
+  const mat = Math.random() > 0.5 ? sharedMaterials.lampLight : sharedMaterials.eyeGlow;
+  for (let cx = 0; cx < cols; cx++) {
+    const wx = -w/2 + 0.7 + cx * ((w - 1.4) / Math.max(1, cols - 1));
+    if (Math.random() > 0.25) {
+      const win = createSolidObject(0.3, 0.35, 0.05, mat, 'box');
+      win.position.set(wx, 0, -d/2 - 0.05);
+      box.add(win);
+    }
+  }
+};
 
 export const Layouts = {
     createSmallTechnicalRoom: (floorW: number, floorD: number, animatedObjects: { fans: THREE.Group[], screens: THREE.Mesh[] } = {fans:[], screens:[]}): { furniture: THREE.Group, inhabitants: THREE.Group[] } => {
@@ -108,6 +123,7 @@ export const Layouts = {
             fGroup.position.y = i * floorHeight;
             const fBox = createWireframeObject(width, floorHeight, depth, wallColor, 0.2);
             fBox.position.y = floorHeight/2;
+            addWindows(fBox, width, depth, floorHeight);
             fGroup.add(fBox);
             
             // Floor Plate

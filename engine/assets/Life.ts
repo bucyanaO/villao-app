@@ -71,7 +71,10 @@ export const Life = {
         wheelPositions.forEach(pos => { const wheel = createWireframeObject(0.3, 0.6, 0.6, 0x333333, 0.8, 'cylinder'); wheel.rotation.z = Math.PI / 2; wheel.position.set(pos[0], pos[1], pos[2]); group.add(wheel); });
         const chassisY = 0.6;
         const body = createWireframeObject(w, height - 0.6, length, bodyColor, 0.5); body.position.set(0, chassisY + (height-0.6)/2, 0); group.add(body); 
-        if (type === 'car' || type === 'taxi') { const cabin = createWireframeObject(w-0.2, 0.6, length-1.5, bodyColor, 0.3); cabin.position.set(0, chassisY + height - 0.3, -0.2); group.add(cabin); }
+        if (type === 'car' || type === 'taxi') { const cabin = createWireframeObject(w-0.3, 0.45, length-1.7, bodyColor, 0.25); cabin.position.set(0, chassisY + height - 0.27, -0.15); group.add(cabin); }
+        // 2026 modern accent: glowing side stripes
+        const aL = createSolidObject(0.04, 0.06, length * 0.72, sharedMaterials.eyeGlow, 'box'); aL.position.set(-w/2 + 0.03, chassisY + 0.18, 0); group.add(aL);
+        const aR = createSolidObject(0.04, 0.06, length * 0.72, sharedMaterials.eyeGlow, 'box'); aR.position.set(w/2 - 0.03, chassisY + 0.18, 0); group.add(aR);
         const hlL = createSolidObject(0.4, 0.4, 0.1, sharedMaterials.vehicleHeadlight, 'box'); hlL.position.set(-0.6, chassisY + 0.2, -length/2); group.add(hlL);
         const hlR = createSolidObject(0.4, 0.4, 0.1, sharedMaterials.vehicleHeadlight, 'box'); hlR.position.set(0.6, chassisY + 0.2, -length/2); group.add(hlR);
         const tlL = createSolidObject(0.4, 0.4, 0.1, sharedMaterials.vehicleTaillight, 'box'); tlL.position.set(-0.6, chassisY + 0.2, length/2); group.add(tlL);
