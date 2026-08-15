@@ -41,14 +41,14 @@ export const DISTRICT_LABEL: Record<DistrictTheme, string> = {
 type Slot = ProgramKind | 'F:oldtown' | 'F:brutal' | 'F:futur' | 'F:mega';
 
 const THEME_MIX: Record<DistrictTheme, Slot[]> = {
-  faubourg: ['maison', 'maison', 'maison', 'magasin', 'ecole', 'parc'],
-  tours: ['bureau', 'bureau', 'immeuble', 'magasin', 'clinique'],
-  'vieille-ville': ['F:oldtown', 'F:oldtown', 'magasin', 'marche', 'atelier'],
-  industriel: ['usine', 'entrepot', 'entrepot', 'atelier', 'usine'],
-  jardins: ['parc', 'maison', 'parc', 'magasin', 'ecole'],
-  brutaliste: ['F:brutal', 'F:brutal', 'immeuble', 'clinique', 'magasin'],
-  futuriste: ['F:futur', 'F:futur', 'bureau', 'magasin', 'parc'],
-  megastructure: ['F:mega', 'F:futur', 'bureau', 'entrepot', 'immeuble'],
+  faubourg: ['maison', 'maison', 'maison', 'boulangerie', 'magasin', 'ecole', 'parc', 'cafe'],
+  tours: ['bureau', 'bureau', 'immeuble', 'hotel', 'banque', 'cafe', 'clinique'],
+  'vieille-ville': ['F:oldtown', 'F:oldtown', 'magasin', 'boulangerie', 'cafe', 'marche', 'musee', 'atelier'],
+  industriel: ['usine', 'entrepot', 'entrepot', 'atelier', 'usine', 'station_service'],
+  jardins: ['parc', 'maison', 'parc', 'ferme', 'magasin', 'ecole', 'bibliotheque'],
+  brutaliste: ['F:brutal', 'F:brutal', 'immeuble', 'clinique', 'magasin', 'poste', 'cinema'],
+  futuriste: ['F:futur', 'F:futur', 'bureau', 'telecom', 'magasin', 'parc'],
+  megastructure: ['F:mega', 'F:futur', 'bureau', 'gare', 'entrepot', 'immeuble'],
 };
 
 export interface DistrictResult {

@@ -14,14 +14,18 @@
  */
 import type { ProgramKind } from './programs';
 
-export type LandClass = 'residentiel' | 'commerce' | 'tertiaire' | 'equipement' | 'industrie' | 'vert';
+export type LandClass = 'residentiel' | 'commerce' | 'tertiaire' | 'equipement' | 'industrie' | 'agricole' | 'vert';
 
 export const CLASS_OF: Record<ProgramKind, LandClass> = {
   maison: 'residentiel', immeuble: 'residentiel',
-  magasin: 'commerce', marche: 'commerce', atelier: 'commerce',
+  magasin: 'commerce', boulangerie: 'commerce', cafe: 'commerce', marche: 'commerce',
+  atelier: 'commerce', banque: 'commerce', hotel: 'commerce', station_service: 'commerce',
   bureau: 'tertiaire',
-  ecole: 'equipement', clinique: 'equipement', mairie: 'equipement',
-  entrepot: 'industrie', usine: 'industrie',
+  ecole: 'equipement', clinique: 'equipement', mairie: 'equipement', universite: 'equipement',
+  bibliotheque: 'equipement', musee: 'equipement', cinema: 'equipement', stade: 'equipement',
+  poste: 'equipement', caserne: 'equipement', police: 'equipement', gare: 'equipement',
+  entrepot: 'industrie', usine: 'industrie', energie: 'industrie', telecom: 'industrie',
+  ferme: 'agricole',
   parc: 'vert',
 };
 
@@ -38,11 +42,15 @@ const SEPARATION: Partial<Record<LandClass, Partial<Record<LandClass, number>>>>
     vert: 45,
     industrie: 0,       // …mais les activités se regroupent volontiers
   },
-  residentiel: { industrie: 130 },
-  equipement: { industrie: 150 },
+  residentiel: { industrie: 130, agricole: 35 },
+  equipement: { industrie: 150, agricole: 30 },
   commerce: { industrie: 55 },
   tertiaire: { industrie: 80 },
   vert: { industrie: 45 },
+  agricole: {
+    // les champs veulent de l'espace, mais s'accommodent du voisinage productif
+    residentiel: 35, equipement: 30, agricole: 0, industrie: 0,
+  },
 };
 
 export function separation(a: LandClass, b: LandClass): number {
@@ -51,8 +59,9 @@ export function separation(a: LandClass, b: LandClass): number {
 
 /** Les usages qui se regroupent en pôle (zone d'activités, quartier d'affaires). */
 export const CLUSTERS: Partial<Record<LandClass, number>> = {
-  industrie: 90,   // rayon d'attraction du pôle
-  tertiaire: 70,
+  industrie: 90,   // zone d'activités
+  tertiaire: 70,   // quartier d'affaires
+  agricole: 120,   // terroir : les fermes se tiennent compagnie
 };
 
 export interface PlacedUse { kind: string; x: number; z: number; }

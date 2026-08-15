@@ -55,19 +55,58 @@ export interface StudioEvent {
 const STORE_KEY = 'villao.studio.v1';
 
 const BASE_ROSTER: Architect[] = [
-  { id: 'nadia', name: 'Nadia', title: 'Urbaniste en chef', affinity: { mairie: 0.9, ecole: 0.8, parc: 0.8, clinique: 0.7 }, skill: 2, xp: 0, works: 0 },
-  { id: 'yassine', name: 'Yassine', title: 'Logement', affinity: { maison: 0.9, immeuble: 0.9, magasin: 0.5 }, skill: 2, xp: 0, works: 0 },
-  { id: 'iris', name: 'Iris', title: 'Commerce & vie de rue', affinity: { magasin: 0.95, marche: 0.9, atelier: 0.6 }, skill: 1, xp: 0, works: 0 },
+  { id: 'nadia', name: 'Nadia', title: 'Urbaniste en chef', affinity: { mairie: 0.9, parc: 0.8, marche: 0.7 }, skill: 2, xp: 0, works: 0 },
+  { id: 'yassine', name: 'Yassine', title: 'Logement', affinity: { maison: 0.9, immeuble: 0.9, hotel: 0.6 }, skill: 2, xp: 0, works: 0 },
+  { id: 'iris', name: 'Iris', title: 'Commerce & vie de rue', affinity: { magasin: 0.95, boulangerie: 0.9, cafe: 0.9, marche: 0.85, banque: 0.6 }, skill: 1, xp: 0, works: 0 },
   { id: 'bruno', name: 'Bruno', title: 'Industrie & logistique', affinity: { usine: 0.95, entrepot: 0.95, atelier: 0.8 }, skill: 1, xp: 0, works: 0 },
-  { id: 'kenji', name: 'Kenji', title: 'Grande hauteur', affinity: { bureau: 0.95, immeuble: 0.7 }, skill: 2, xp: 0, works: 0 },
+  { id: 'kenji', name: 'Kenji', title: 'Grande hauteur', affinity: { bureau: 0.95, immeuble: 0.7, hotel: 0.7 }, skill: 2, xp: 0, works: 0 },
+  { id: 'omar', name: 'Omar', title: 'Équipements publics', affinity: { ecole: 0.95, universite: 0.9, clinique: 0.9, caserne: 0.85, police: 0.85, poste: 0.8, mairie: 0.7 }, skill: 2, xp: 0, works: 0 },
+  { id: 'zoe', name: 'Zoé', title: 'Culture & tourisme', affinity: { musee: 0.95, bibliotheque: 0.9, cinema: 0.9, hotel: 0.8, stade: 0.6 }, skill: 1, xp: 0, works: 0 },
+  { id: 'lea', name: 'Léa', title: 'Paysage & agriculture', affinity: { parc: 0.95, ferme: 0.9, stade: 0.7, marche: 0.6 }, skill: 1, xp: 0, works: 0 },
+  { id: 'raf', name: 'Raf', title: 'Réseaux & énergie', affinity: { energie: 0.95, telecom: 0.9, gare: 0.85, station_service: 0.85 }, skill: 1, xp: 0, works: 0 },
 ];
 
-/** Programme visé pour la ville (parts relatives). */
-const TARGET_MIX: Record<ProgramKind, number> = {
-  maison: 0.26, immeuble: 0.13, magasin: 0.14, atelier: 0.05, marche: 0.03,
-  entrepot: 0.08, usine: 0.06, bureau: 0.07, ecole: 0.05, clinique: 0.04,
-  mairie: 0.01, parc: 0.08,
+/**
+ * MODÈLE DE VILLE — ce que le cabinet a en tête quand il décide.
+ *
+ * Rien n'est tiré au sort : on déduit la POPULATION du parc de logements, les
+ * EMPLOIS des activités, puis on compare les équipements existants à ce qu'une
+ * ville de cette taille doit offrir. Le programme retenu est celui dont la
+ * ville manque le plus. C'est ce qui la rend cohérente : une école arrive quand
+ * il y a des habitants, un stade quand il y a une vraie population, une gare
+ * quand la ville est devenue grande.
+ */
+const HOUSING: Partial<Record<ProgramKind, number>> = { maison: 4, immeuble: 26 };
+
+/** Emplois offerts par programme. */
+const JOBS: Partial<Record<ProgramKind, number>> = {
+  usine: 45, entrepot: 18, bureau: 60, atelier: 6, ferme: 9, hotel: 22,
+  magasin: 4, boulangerie: 3, cafe: 4, marche: 14, banque: 10,
+  ecole: 14, universite: 60, clinique: 18, mairie: 20, poste: 8,
+  caserne: 14, police: 16, gare: 12, musee: 8, bibliotheque: 6, cinema: 6,
+  stade: 8, energie: 6, telecom: 1, station_service: 3, parc: 0, maison: 0, immeuble: 0,
 };
+
+/** Un équipement pour N habitants (le service que la ville se doit). */
+const SERVICE_PER_CAPITA: Partial<Record<ProgramKind, number>> = {
+  boulangerie: 220, magasin: 150, cafe: 260, marche: 900,
+  ecole: 320, clinique: 520, parc: 300, poste: 1100, banque: 1300,
+  caserne: 1500, police: 1400, bibliotheque: 1200, cinema: 1600,
+  station_service: 900, energie: 700, telecom: 1200,
+  gare: 2000, musee: 2400, mairie: 2500, stade: 4000, universite: 5000,
+};
+
+/** Part des habitants qui doit trouver un emploi dans la ville. */
+const ACTIVITY_RATE = 0.48;
+
+/** Programmes d'emploi mobilisables quand le travail manque. */
+const EMPLOYERS: ProgramKind[] = ['magasin', 'boulangerie', 'cafe', 'atelier', 'bureau', 'usine', 'entrepot', 'ferme', 'hotel'];
+
+export interface CityReport {
+  population: number;
+  jobs: number;
+  needs: { kind: ProgramKind; missing: number }[];
+}
 
 /**
  * Distance à un CENTRE (centre-ville ou coeur de quartier) — en mètres.
@@ -78,10 +117,22 @@ const TARGET_MIX: Record<ProgramKind, number> = {
  * marché doivent être dedans.
  */
 const CENTER_RULE: Partial<Record<ProgramKind, { min?: number; max?: number; ideal?: number }>> = {
-  usine: { min: 150 }, entrepot: { min: 140 }, atelier: { min: 60 },
+  // production et réseaux : à l'écart
+  usine: { min: 150 }, entrepot: { min: 140 }, ferme: { min: 240 },
+  energie: { min: 200 }, telecom: { min: 130 }, atelier: { min: 60 },
+  // le coeur de ville
   mairie: { max: 120, ideal: 60 }, marche: { max: 160, ideal: 70 },
-  bureau: { max: 260, ideal: 90 },
-  magasin: { ideal: 90 }, ecole: { min: 40, ideal: 130 }, clinique: { min: 40, ideal: 130 },
+  banque: { max: 180, ideal: 70 }, poste: { max: 200, ideal: 80 },
+  bureau: { max: 260, ideal: 90 }, hotel: { max: 220, ideal: 80 },
+  gare: { max: 240, ideal: 110 }, cinema: { max: 240, ideal: 110 },
+  musee: { max: 260, ideal: 120 }, bibliotheque: { max: 240, ideal: 110 },
+  // le quotidien, au pied des logements
+  boulangerie: { ideal: 70 }, cafe: { ideal: 80 }, magasin: { ideal: 90 },
+  ecole: { min: 40, ideal: 130 }, clinique: { min: 40, ideal: 140 },
+  caserne: { min: 60, ideal: 170 }, police: { min: 50, ideal: 160 },
+  station_service: { min: 80, ideal: 200 },
+  // les grandes emprises, en périphérie
+  universite: { min: 80, ideal: 260 }, stade: { min: 140, ideal: 300 },
   maison: { ideal: 170 }, immeuble: { ideal: 110 }, parc: { ideal: 120 },
 };
 
@@ -106,6 +157,8 @@ export interface Studio {
   start(): void;
   stop(): void;
   roster(): Architect[];
+  /** Population, emplois et manques : ce que le cabinet a sous les yeux. */
+  report(): CityReport;
   journal(): StudioEvent[];
   /** déclenche un chantier immédiatement (commande console / God Mode) */
   commission(kind?: ProgramKind): string | null;
@@ -151,20 +204,62 @@ export function createStudio(ctx: StudioCtx, opts: StudioOptions = {}): Studio {
     ctx.onEvent?.(e);
   };
 
-  /** Le programme le plus déficitaire par rapport au plan d'urbanisme. */
-  const chooseKind = (): ProgramKind => {
+  /** Photographie de la ville : population, emplois, manques. */
+  const survey = (): CityReport => {
     const counts = countByKind();
-    const total = Math.max(1, Object.values(counts).reduce((a, b) => a + b, 0));
-    let best: ProgramKind = 'maison';
-    let bestDeficit = -Infinity;
-    for (const [kind, share] of Object.entries(TARGET_MIX) as [ProgramKind, number][]) {
-      if ((stalled.get(kind) ?? 0) > 0) continue;   // rien de faisable pour lui en ce moment
-      const have = (counts[kind] || 0) / total;
-      // petit bruit : deux villes ne se ressemblent jamais tout à fait
-      const deficit = share - have + Math.random() * 0.03;
-      if (deficit > bestDeficit) { bestDeficit = deficit; best = kind; }
+    let population = 0;
+    let jobs = 0;
+    for (const [kind, n] of Object.entries(counts) as [ProgramKind, number][]) {
+      population += (HOUSING[kind] ?? 0) * n;
+      jobs += (JOBS[kind] ?? 0) * n;
     }
-    return best;
+
+    const needs: { kind: ProgramKind; missing: number }[] = [];
+    const have = (k: ProgramKind) => counts[k] ?? 0;
+
+    // Toutes les urgences sont ramenées à une même échelle de « pression »
+    // (0 → 3). Sans cela, le besoin d'emploi — qui se compte en dizaines de
+    // postes — écrasait tous les autres et la ville se couvrait de boulangeries.
+    const press = (v: number) => Math.max(0, Math.min(3, v));
+
+    // a) les services dus à la population
+    for (const [kind, per] of Object.entries(SERVICE_PER_CAPITA) as [ProgramKind, number][]) {
+      const required = Math.floor(population / per);
+      const missing = required - have(kind);
+      if (missing > 0) needs.push({ kind, missing: press(missing) });
+    }
+
+    // b) l'emploi : une ville doit faire vivre ses habitants
+    const jobsNeeded = Math.round(population * ACTIVITY_RATE) - jobs;
+    if (jobsNeeded > 0) {
+      const pressure = press(jobsNeeded / 150);
+      for (const kind of EMPLOYERS) {
+        // à pression égale, on privilégie ce dont la ville a le moins
+        needs.push({ kind, missing: pressure - Math.min(1.2, have(kind) / 6) });
+      }
+    }
+
+    // c) le logement : s'il y a plus d'emplois que d'actifs, on loge
+    const housingNeeded = Math.round(jobs / ACTIVITY_RATE) - population;
+    if (housingNeeded > 0 || population < 60) {
+      needs.push({ kind: 'maison', missing: press(housingNeeded / 60) + (population < 60 ? 2 : 0) });
+      needs.push({ kind: 'immeuble', missing: press(housingNeeded / 160) });
+    }
+
+    needs.sort((a, b) => b.missing - a.missing);
+    return { population, jobs, needs };
+  };
+
+  /**
+   * Le programme dont la ville manque le plus — avec une petite part de hasard
+   * parmi les trois premiers, pour que deux villes ne se ressemblent jamais.
+   */
+  const chooseKind = (): ProgramKind => {
+    const { needs } = survey();
+    const open = needs.filter((n) => (stalled.get(n.kind) ?? 0) <= 0);
+    if (!open.length) return 'maison';
+    const pool = open.slice(0, 3);
+    return pool[Math.floor(Math.random() * pool.length)].kind;
   };
 
   /** L'agent le plus indiqué : compétence d'abord, équité ensuite, variation enfin. */
@@ -393,6 +488,7 @@ export function createStudio(ctx: StudioCtx, opts: StudioOptions = {}): Studio {
     },
     stop() { if (timer) { clearInterval(timer); timer = null; } },
     roster: () => roster,
+    report: survey,
     journal: () => events,
     commission,
   };

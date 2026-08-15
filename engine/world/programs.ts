@@ -17,8 +17,18 @@ import type { Rng } from './rng';
 import { makeSign } from './signage';
 
 export type ProgramKind =
-  | 'maison' | 'immeuble' | 'bureau' | 'magasin' | 'marche'
-  | 'entrepot' | 'usine' | 'ecole' | 'clinique' | 'mairie' | 'atelier' | 'parc';
+  // habiter
+  | 'maison' | 'immeuble' | 'hotel'
+  // travailler
+  | 'bureau' | 'atelier' | 'usine' | 'entrepot' | 'ferme'
+  // commercer / se retrouver
+  | 'magasin' | 'boulangerie' | 'cafe' | 'marche' | 'banque'
+  // apprendre, se soigner, se cultiver
+  | 'ecole' | 'universite' | 'clinique' | 'bibliotheque' | 'musee' | 'cinema' | 'stade'
+  // servir la ville
+  | 'mairie' | 'poste' | 'caserne' | 'police' | 'gare' | 'station_service' | 'energie' | 'telecom'
+  // respirer
+  | 'parc';
 
 /**
  * Emprise réservée au cadastre pour chaque programme.
@@ -29,16 +39,23 @@ export type ProgramKind =
  * cette enveloppe.
  */
 export const PROGRAM_FOOTPRINT: Record<ProgramKind, number> = {
-  maison: 16, magasin: 16, atelier: 16,
-  immeuble: 18, bureau: 18,
-  marche: 30, ecole: 30, clinique: 30, mairie: 30, parc: 26,
+  maison: 16, magasin: 16, atelier: 16, boulangerie: 16, cafe: 16, poste: 18, banque: 18,
+  immeuble: 18, bureau: 18, telecom: 14, station_service: 22,
+  hotel: 24, cinema: 28, bibliotheque: 26, musee: 30,
+  marche: 30, ecole: 30, clinique: 30, mairie: 30, parc: 26, police: 26, caserne: 28,
+  gare: 40, universite: 44, stade: 52, ferme: 46, energie: 44,
   entrepot: 38, usine: 36,
 };
 
 export const PROGRAM_LABEL: Record<ProgramKind, string> = {
-  maison: 'Maison', immeuble: 'Immeuble', bureau: 'Bureau', magasin: 'Magasin',
-  marche: 'Marché', entrepot: 'Entrepôt', usine: 'Usine', ecole: 'École',
-  clinique: 'Clinique', mairie: 'Mairie', atelier: 'Atelier', parc: 'Square',
+  maison: 'Maison', immeuble: 'Immeuble', hotel: 'Hôtel',
+  bureau: 'Bureau', atelier: 'Atelier', usine: 'Usine', entrepot: 'Entrepôt', ferme: 'Ferme',
+  magasin: 'Magasin', boulangerie: 'Boulangerie', cafe: 'Café', marche: 'Marché', banque: 'Banque',
+  ecole: 'École', universite: 'Université', clinique: 'Clinique', bibliotheque: 'Bibliothèque',
+  musee: 'Musée', cinema: 'Cinéma', stade: 'Stade',
+  mairie: 'Mairie', poste: 'Poste', caserne: 'Caserne', police: 'Police', gare: 'Gare',
+  station_service: 'Station-service', energie: 'Parc énergétique', telecom: 'Relais télécom',
+  parc: 'Square',
 };
 
 export interface BuiltProgram {
@@ -59,6 +76,23 @@ const NAMES: Record<string, string[]> = {
   mairie: ['Hôtel de Ville'],
   atelier: ['Atelier de Léo', 'Garage de Sam', 'Fablab'],
   bureau: ['Tour Nord', 'Immeuble Cyan', 'Bureaux du Parc'],
+  boulangerie: ['Au Bon Pain', 'Boulangerie Marc', 'Le Fournil'],
+  cafe: ['Café des Voxels', 'Le Comptoir', 'Bistrot du Parc', 'Chez Sara'],
+  hotel: ['Hôtel du Parc', 'Grand Hôtel Villao'],
+  banque: ['Banque de la Cité', 'Crédit Voxel'],
+  poste: ['La Poste'],
+  cinema: ['Cinéma Lumière', 'Le Rex'],
+  bibliotheque: ['Bibliothèque Municipale'],
+  musee: ["Musée d'Art Voxel", 'Musée de la Ville'],
+  stade: ['Stade Municipal'],
+  caserne: ['Caserne des Pompiers'],
+  police: ['Commissariat Central'],
+  gare: ['Gare Centrale', 'Gare du Nord'],
+  universite: ['Université de Villao'],
+  ferme: ['Ferme des Coteaux', 'Exploitation Sud'],
+  station_service: ['Station Villao'],
+  energie: ['Parc Solaire', 'Champ Éolien'],
+  telecom: ['Relais Nord'],
 };
 
 const emptyAnimated = () => ({ fans: [] as THREE.Group[], screens: [] as THREE.Mesh[] });
@@ -436,11 +470,452 @@ function parc(rng: Rng, level: number): BuiltProgram {
   return { group: g, footprint: size + 4, inhabitants, animated: emptyAnimated(), label: PROGRAM_LABEL.parc };
 }
 
+
+// --- Commerces de proximité --------------------------------------------------
+
+/** Petit commerce type (boulangerie, café) : même grammaire, ambiances différentes. */
+function commerceDeRue(
+  rng: Rng, level: number, kind: 'boulangerie' | 'cafe',
+): BuiltProgram {
+  const g = new THREE.Group();
+  const inhabitants: THREE.Group[] = [];
+  const w = rng.range(8, 10), d = rng.range(8, 9), h = 4;
+  const wall = kind === 'boulangerie' ? rng.pick([0xe8d8b0, 0xd8c49a]) : rng.pick([0x2f4f4f, 0x3d5a5a, 0x6b3f3f]);
+
+  const body = box(w, h, d, wall, 0.6); body.position.y = h / 2; g.add(body);
+  const vitrine = box(w - 1.4, 2.4, 0.2, CITY_THEME.colors.buildings.glass, 0.35);
+  vitrine.position.set(0, 1.5, d / 2); g.add(vitrine);
+  const store = CityAssets.primitives.createSolidObject(w - 0.4, 0.16, 2, getMaterial(kind === 'boulangerie' ? 0xb03030 : 0x2f7f5f, false), 'box');
+  store.position.set(0, 3.1, d / 2 + 0.9); store.rotation.x = 0.2; g.add(store);
+  const sign = makeSign(rng.pick(NAMES[kind]), w - 1.2, kind === 'boulangerie' ? '#ffe9c0' : '#d6fff6');
+  sign.position.set(0, 4.4, d / 2 + 0.12); g.add(sign);
+  const lamp = new THREE.PointLight(kind === 'boulangerie' ? 0xffcf90 : 0xffe0b0, 0.9, 11);
+  lamp.position.set(0, 3.6, d / 2 + 1.6); g.add(lamp);
+
+  if (kind === 'cafe') {
+    // terrasse : tables, chaises, clients — c'est là que la rue devient vivante
+    const nTables = 2 + level;
+    for (let i = 0; i < nTables; i++) {
+      const tx = -w / 2 + 1.5 + (i % 3) * 2.4;
+      const tz = d / 2 + 2 + Math.floor(i / 3) * 2.2;
+      const table = CityAssets.Furniture.createTableSet();
+      table.position.set(tx, 0, tz); table.scale.setScalar(0.8); g.add(table);
+      if (rng.chance(0.7)) {
+        const client = CityAssets.Life.createInhabitant(InhabitantState.SITTING);
+        client.position.set(tx + 0.7, 0.2, tz); client.rotation.y = -Math.PI / 2;
+        g.add(client); inhabitants.push(client);
+      }
+    }
+  } else {
+    // fournil : pétrin, four, présentoirs
+    for (let i = 0; i < 3; i++) {
+      const shelf = box(w - 3, 1.2, 0.6, 0x8a6b45, 0.7);
+      shelf.position.set(0, 0.6, -d / 2 + 1.4 + i * 1.5); g.add(shelf);
+    }
+    const four = box(2.4, 2.2, 1.6, 0x552222, 0.85);
+    four.position.set(w / 2 - 2, 1.1, -d / 2 + 1.4); g.add(four);
+  }
+  const staff = CityAssets.Life.createInhabitant(InhabitantState.WORKING);
+  staff.position.set(-w / 4, 0.15, -0.5); g.add(staff); inhabitants.push(staff);
+
+  return { group: g, footprint: PROGRAM_FOOTPRINT[kind], inhabitants, animated: emptyAnimated(), label: PROGRAM_LABEL[kind] };
+}
+
+function hotel(rng: Rng, level: number): BuiltProgram {
+  const floors = 4 + level;
+  const wall = rng.pick(CITY_THEME.colors.buildings.walls);
+  const bd = CityAssets.Layouts.createProceduralBuilding(13, 12, floors, 'modern', wall);
+  const g = bd.group;
+  // marquise d'entrée + enseigne verticale : la signature d'un hôtel
+  const marquise = CityAssets.primitives.createSolidObject(9, 0.3, 4, getMaterial(0x1b2a3a, false), 'box');
+  marquise.position.set(0, 3.4, 7.5); g.add(marquise);
+  for (const sx of [-4, 4]) {
+    const col = box(0.4, 3.4, 0.4, 0xd8d0c0, 0.9);
+    col.position.set(sx, 1.7, 9.2); g.add(col);
+  }
+  const banner = makeSign(rng.pick(NAMES.hotel), 3.2, '#ffe9c0');
+  banner.position.set(6.8, floors * 1.8, 6.2);
+  banner.rotation.z = Math.PI / 2; g.add(banner);
+  const light = new THREE.PointLight(0xffd9a0, 1.1, 16);
+  light.position.set(0, 3.6, 8.5); g.add(light);
+  return { group: g, footprint: PROGRAM_FOOTPRINT.hotel, inhabitants: bd.inhabitants, animated: bd.animatedObjects, label: PROGRAM_LABEL.hotel };
+}
+
+function banque(rng: Rng, level: number): BuiltProgram {
+  const g = new THREE.Group();
+  const inhabitants: THREE.Group[] = [];
+  const animated = emptyAnimated();
+  const w = 13, d = 11, h = 4.6 + level * 0.3;
+  const body = box(w, h, d, 0xdcd6c8, 0.7); body.position.y = h / 2; g.add(body);
+  // fronton à colonnes
+  for (let i = 0; i < 4; i++) {
+    const col = CityAssets.primitives.createWireframeObject(0.8, h, 0.8, 0xefe9dc, 0.95, 'cylinder');
+    col.position.set(-4.5 + i * 3, h / 2, d / 2 + 1.4); g.add(col);
+  }
+  const fronton = CityAssets.primitives.createSolidObject(w, 1.2, 3.4, getMaterial(0xefe9dc, false), 'box');
+  fronton.position.set(0, h + 0.6, d / 2 + 1.2); g.add(fronton);
+  const sign = makeSign(rng.pick(NAMES.banque), 8, '#1b2a3a', 'rgba(240,236,225,0.95)');
+  sign.position.set(0, h + 0.6, d / 2 + 2.95); g.add(sign);
+  const layout = CityAssets.Layouts.createGroundFloorLayout('lobby', w - 2, d - 2, animated);
+  layout.furniture.position.y = 0.1; g.add(layout.furniture);
+  layout.inhabitants.forEach((i) => { i.position.y += 0.1; g.add(i); inhabitants.push(i); });
+  return { group: g, footprint: PROGRAM_FOOTPRINT.banque, inhabitants, animated, label: PROGRAM_LABEL.banque };
+}
+
+// --- Culture & loisirs -------------------------------------------------------
+
+function cinema(rng: Rng, level: number): BuiltProgram {
+  const g = new THREE.Group();
+  const inhabitants: THREE.Group[] = [];
+  const w = 18, d = 14, h = 8;
+  const body = box(w, h, d, 0x3a2a3a, 0.65); body.position.y = h / 2; g.add(body);
+  // auvent lumineux + affiches
+  const auvent = CityAssets.primitives.createSolidObject(w + 1.5, 0.5, 3.2, getMaterial(0xffcc33, false), 'box');
+  auvent.position.set(0, 4.2, d / 2 + 1.4); g.add(auvent);
+  const sign = makeSign(rng.pick(NAMES.cinema), 10, '#1b1020', 'rgba(255,204,51,0.95)');
+  sign.position.set(0, 5.6, d / 2 + 0.15); g.add(sign);
+  for (let i = 0; i < 3; i++) {
+    const affiche = box(1.8, 2.6, 0.15, rng.pick([0xff4477, 0x44aaff, 0xffdd44]), 0.8);
+    affiche.position.set(-6 + i * 6, 1.6, d / 2 + 0.1); g.add(affiche);
+  }
+  const glow = new THREE.PointLight(0xffcc55, 1.3, 20);
+  glow.position.set(0, 4.6, d / 2 + 3); g.add(glow);
+  for (let i = 0; i < 2 + level; i++) {
+    const p = CityAssets.Life.createInhabitant(InhabitantState.IDLE);
+    p.position.set(rng.range(-w / 3, w / 3), 0.2, d / 2 + rng.range(2.5, 5));
+    p.rotation.y = Math.PI; g.add(p); inhabitants.push(p);
+  }
+  return { group: g, footprint: PROGRAM_FOOTPRINT.cinema, inhabitants, animated: emptyAnimated(), label: PROGRAM_LABEL.cinema };
+}
+
+function bibliotheque(rng: Rng, level: number): BuiltProgram {
+  const g = new THREE.Group();
+  const inhabitants: THREE.Group[] = [];
+  const w = 16, d = 13, h = 7;
+  const body = box(w, h, d, 0xd9cfae, 0.65); body.position.y = h / 2; g.add(body);
+  const roof = CityAssets.primitives.createSolidObject(w + 1, 0.4, d + 1, getMaterial(0x8a7f60, false), 'box');
+  roof.position.y = h + 0.2; g.add(roof);
+  // grandes verrières + rayonnages visibles
+  for (let i = 0; i < 4; i++) {
+    const bay = box(2.4, h - 2, 0.2, CITY_THEME.colors.buildings.glass, 0.3);
+    bay.position.set(-6 + i * 4, h / 2, d / 2); g.add(bay);
+  }
+  for (let i = 0; i < 4 + level; i++) {
+    const stack = box(w - 4, 2.2, 0.7, 0x6b5a45, 0.8);
+    stack.position.set(0, 1.1, -d / 2 + 1.6 + i * 1.6); g.add(stack);
+  }
+  const reader = CityAssets.Life.createInhabitant(InhabitantState.SITTING);
+  reader.position.set(2, 0.2, 2); g.add(reader); inhabitants.push(reader);
+  const sign = makeSign(rng.pick(NAMES.bibliotheque), 8);
+  sign.position.set(0, h - 1, d / 2 + 0.12); g.add(sign);
+  return { group: g, footprint: PROGRAM_FOOTPRINT.bibliotheque, inhabitants, animated: emptyAnimated(), label: PROGRAM_LABEL.bibliotheque };
+}
+
+function musee(rng: Rng, level: number): BuiltProgram {
+  const g = new THREE.Group();
+  const inhabitants: THREE.Group[] = [];
+  const w = 20, d = 16, h = 9;
+  // volume sculpté : un musée doit se remarquer
+  const body = box(w, h, d, 0xf0efe9, 0.6); body.position.y = h / 2; g.add(body);
+  const wing = box(w * 0.5, h * 0.6, d * 0.7, 0xe3e0d4, 0.7);
+  wing.position.set(w * 0.4, h * 0.3, -d * 0.35); wing.rotation.y = 0.35; g.add(wing);
+  const prisme = CityAssets.primitives.createWireframeObject(7, 7, 7, CITY_THEME.colors.buildings.glass, 0.25, 'icosahedron');
+  prisme.position.set(-w * 0.25, h + 2, d * 0.1); g.add(prisme);
+  const parvis = CityAssets.primitives.createSolidObject(w + 6, 0.08, 8, sharedMaterials.sidewalkConcrete, 'box');
+  parvis.position.set(0, 0.05, d / 2 + 4); g.add(parvis);
+  const statue = CityAssets.Props.createHoloStatue();
+  statue.position.set(0, 0.1, d / 2 + 4); g.add(statue);
+  const sign = makeSign(rng.pick(NAMES.musee), 9);
+  sign.position.set(0, h - 1.5, d / 2 + 0.12); g.add(sign);
+  for (let i = 0; i < 2 + level; i++) {
+    const v = CityAssets.Life.createInhabitant(InhabitantState.WALKING, {
+      minX: -w / 2, maxX: w / 2, minZ: d / 2 + 1, maxZ: d / 2 + 7,
+    });
+    v.position.set(rng.range(-w / 2, w / 2), 0.2, d / 2 + rng.range(1.5, 6.5));
+    g.add(v); inhabitants.push(v);
+  }
+  return { group: g, footprint: PROGRAM_FOOTPRINT.musee, inhabitants, animated: emptyAnimated(), label: PROGRAM_LABEL.musee };
+}
+
+function stade(rng: Rng, level: number): BuiltProgram {
+  const g = new THREE.Group();
+  const inhabitants: THREE.Group[] = [];
+  const rx = 24, rz = 18;
+  // pelouse + piste
+  const pitch = new THREE.Mesh(new THREE.PlaneGeometry(rx * 1.1, rz * 1.1), sharedMaterials.grassGreen);
+  pitch.rotation.x = -Math.PI / 2; pitch.position.y = 0.03; g.add(pitch);
+  const line = new THREE.Mesh(new THREE.RingGeometry(4, 4.3, 24), sharedMaterials.crosswalkWhite);
+  line.rotation.x = -Math.PI / 2; line.position.y = 0.05; g.add(line);
+  // gradins : un anneau de blocs inclinés
+  const segs = 20;
+  for (let i = 0; i < segs; i++) {
+    const a = (i / segs) * Math.PI * 2;
+    const stand = box(6.5, 6, 4, rng.pick([0x334455, 0x3b4f63]), 0.75);
+    stand.position.set(Math.cos(a) * (rx * 0.78), 3, Math.sin(a) * (rz * 0.9));
+    stand.rotation.y = -a;
+    g.add(stand);
+  }
+  // projecteurs
+  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    const mast = box(0.8, 20, 0.8, 0x9aa0a6, 0.9);
+    mast.position.set(sx * rx * 0.8, 10, sz * rz * 1.0); g.add(mast);
+    const lampBox = CityAssets.primitives.createSolidObject(3, 0.8, 1, sharedMaterials.lampLight, 'box');
+    lampBox.position.set(sx * rx * 0.8, 19.5, sz * rz * 1.0); g.add(lampBox);
+    const l = new THREE.PointLight(0xffffee, 0.8, 45);
+    l.position.set(sx * rx * 0.6, 18, sz * rz * 0.7); g.add(l);
+  }
+  for (let i = 0; i < 4 + level * 2; i++) {
+    const p = CityAssets.Life.createInhabitant(InhabitantState.WALKING, {
+      minX: -rx / 2, maxX: rx / 2, minZ: -rz / 2, maxZ: rz / 2,
+    });
+    p.position.set(rng.range(-rx / 2, rx / 2), 0.2, rng.range(-rz / 2, rz / 2));
+    g.add(p); inhabitants.push(p);
+  }
+  const sign = makeSign(rng.pick(NAMES.stade), 10);
+  sign.position.set(0, 7.5, rz * 1.05); g.add(sign);
+  return { group: g, footprint: PROGRAM_FOOTPRINT.stade, inhabitants, animated: emptyAnimated(), label: PROGRAM_LABEL.stade };
+}
+
+// --- Services publics --------------------------------------------------------
+
+function caserne(rng: Rng, level: number, police = false): BuiltProgram {
+  const g = new THREE.Group();
+  const inhabitants: THREE.Group[] = [];
+  const w = 16, d = 12, h = 6;
+  const wall = police ? 0x2b3f66 : 0x8c2f2f;
+  const body = box(w, h, d, wall, 0.7); body.position.y = h / 2; g.add(body);
+  // grandes portes de remise / entrée surveillée
+  const bays = police ? 1 : 2 + Math.floor(level / 2);
+  for (let i = 0; i < bays; i++) {
+    const door = box(4, 4.2, 0.3, 0x101418, 0.9);
+    door.position.set(-w / 2 + 3 + i * 5, 2.1, d / 2 + 0.2); g.add(door);
+  }
+  const tour = box(3, h + 5, 3, wall, 0.8);
+  tour.position.set(w / 2 - 2, (h + 5) / 2, -d / 2 + 2); g.add(tour);
+  const gyro = CityAssets.primitives.createSolidObject(1.2, 0.4, 1.2, getMaterial(police ? 0x3388ff : 0xff3322, false), 'box');
+  gyro.position.set(w / 2 - 2, h + 5.4, -d / 2 + 2); g.add(gyro);
+  const l = new THREE.PointLight(police ? 0x3388ff : 0xff3322, 1.2, 18);
+  l.position.copy(gyro.position); g.add(l);
+  const veh = CityAssets.Life.createVehicle('truck');
+  veh.position.set(-w / 4, 0.1, d / 2 + 5); veh.rotation.y = Math.PI; g.add(veh);
+  const agent = CityAssets.Life.createInhabitant(InhabitantState.WORKING);
+  agent.position.set(w / 4, 0.15, d / 2 + 2.5); g.add(agent); inhabitants.push(agent);
+  const sign = makeSign(rng.pick(NAMES[police ? 'police' : 'caserne']), 8);
+  sign.position.set(0, h - 0.8, d / 2 + 0.12); g.add(sign);
+  return { group: g, footprint: PROGRAM_FOOTPRINT[police ? 'police' : 'caserne'], inhabitants, animated: emptyAnimated(), label: PROGRAM_LABEL[police ? 'police' : 'caserne'] };
+}
+
+function poste(rng: Rng, level: number): BuiltProgram {
+  const g = new THREE.Group();
+  const inhabitants: THREE.Group[] = [];
+  const w = 12, d = 10, h = 5;
+  const body = box(w, h, d, 0xe8c840, 0.6); body.position.y = h / 2; g.add(body);
+  const band = CityAssets.primitives.createSolidObject(w + 0.3, 0.7, d + 0.3, getMaterial(0x1b3fa0, false), 'box');
+  band.position.y = h - 1; g.add(band);
+  const sign = makeSign(NAMES.poste[0], 7, '#ffffff', 'rgba(27,63,160,0.95)');
+  sign.position.set(0, h - 1, d / 2 + 0.2); g.add(sign);
+  for (let i = 0; i < 1 + Math.floor(level / 2); i++) {
+    const van = CityAssets.Life.createVehicle('truck');
+    van.position.set(-w / 2 + 2 + i * 4, 0.1, d / 2 + 5); van.rotation.y = Math.PI; g.add(van);
+  }
+  const agent = CityAssets.Life.createInhabitant(InhabitantState.WORKING);
+  agent.position.set(0, 0.15, -1); g.add(agent); inhabitants.push(agent);
+  return { group: g, footprint: PROGRAM_FOOTPRINT.poste, inhabitants, animated: emptyAnimated(), label: PROGRAM_LABEL.poste };
+}
+
+function gare(rng: Rng, level: number): BuiltProgram {
+  const g = new THREE.Group();
+  const inhabitants: THREE.Group[] = [];
+  const w = 26, d = 14, h = 9;
+  const hall = box(w, h, d, 0xcfd6dd, 0.55); hall.position.y = h / 2; g.add(hall);
+  // verrière + horloge
+  const verriere = box(w - 2, 1.2, d - 2, CITY_THEME.colors.buildings.glass, 0.3);
+  verriere.position.y = h + 0.4; g.add(verriere);
+  const clock = makeSign('08:42', 2.6, '#111111', '#f5f0e0');
+  clock.position.set(0, h - 1.4, d / 2 + 0.12); g.add(clock);
+  const sign = makeSign(rng.pick(NAMES.gare), 10);
+  sign.position.set(0, h - 4, d / 2 + 0.12); g.add(sign);
+  // quais et voies : deux rails filants + un quai central
+  for (const s of [-1, 1]) {
+    const rail = CityAssets.primitives.createSolidObject(60, 0.12, 0.25, getMaterial(0x9aa0a6, false), 'box');
+    rail.position.set(0, 0.1, -d / 2 - 4 + s * 1.4); g.add(rail);
+  }
+  const quai = CityAssets.primitives.createSolidObject(50, 0.5, 4, sharedMaterials.sidewalkConcrete, 'box');
+  quai.position.set(0, 0.25, -d / 2 - 9); g.add(quai);
+  for (let i = 0; i < 3 + level; i++) {
+    const p = CityAssets.Life.createInhabitant(InhabitantState.WALKING, {
+      minX: -20, maxX: 20, minZ: -d / 2 - 11, maxZ: -d / 2 - 7,
+    });
+    p.position.set(rng.range(-18, 18), 0.7, -d / 2 - 9);
+    g.add(p); inhabitants.push(p);
+  }
+  const bus = CityAssets.Life.createVehicle('bus');
+  bus.position.set(-w / 3, 0.1, d / 2 + 6); bus.rotation.y = Math.PI / 2; g.add(bus);
+  return { group: g, footprint: PROGRAM_FOOTPRINT.gare, inhabitants, animated: emptyAnimated(), label: PROGRAM_LABEL.gare };
+}
+
+function universite(rng: Rng, level: number): BuiltProgram {
+  const g = new THREE.Group();
+  const inhabitants: THREE.Group[] = [];
+  const animated = emptyAnimated();
+  // campus : trois ailes autour d'une cour
+  const wall = 0xdccfb4;
+  const specs: [number, number, number, number, number][] = [
+    [0, -12, 26, 10, 8], [-13, 2, 10, 22, 7], [13, 2, 10, 22, 7],
+  ];
+  for (const [x, z, w, d, h] of specs) {
+    const b = box(w, h, d, wall, 0.65);
+    b.position.set(x, h / 2, z); g.add(b);
+    const roof = CityAssets.primitives.createSolidObject(w + 0.8, 0.4, d + 0.8, getMaterial(0x6b5a45, false), 'box');
+    roof.position.set(x, h + 0.2, z); g.add(roof);
+  }
+  const lawn = new THREE.Mesh(new THREE.PlaneGeometry(22, 20), sharedMaterials.grassGreen);
+  lawn.rotation.x = -Math.PI / 2; lawn.position.set(0, 0.03, 4); g.add(lawn);
+  for (let i = 0; i < 4; i++) {
+    const t = CityAssets.Props.createHolographicTree(rng.range(1.2, 2), CITY_THEME.colors.props.greenFoliage);
+    t.position.set(rng.range(-9, 9), 0, rng.range(-4, 12)); g.add(t);
+  }
+  const sign = makeSign(NAMES.universite[0], 10);
+  sign.position.set(0, 7, -12 + 5.2); g.add(sign);
+  for (let i = 0; i < 4 + level * 2; i++) {
+    const st = CityAssets.Life.createInhabitant(InhabitantState.WALKING, {
+      minX: -10, maxX: 10, minZ: -6, maxZ: 13,
+    });
+    st.position.set(rng.range(-9, 9), 0.2, rng.range(-5, 12));
+    g.add(st); inhabitants.push(st);
+  }
+  return { group: g, footprint: PROGRAM_FOOTPRINT.universite, inhabitants, animated, label: PROGRAM_LABEL.universite };
+}
+
+// --- Production & réseaux ----------------------------------------------------
+
+function ferme(rng: Rng, level: number): BuiltProgram {
+  const g = new THREE.Group();
+  const inhabitants: THREE.Group[] = [];
+  // corps de ferme + grange
+  const house = box(10, 4, 8, 0xd8c8a0, 0.6); house.position.set(-9, 2, 0); g.add(house);
+  const roofSlope = Math.atan2(2, 5);
+  for (const s of [-1, 1]) {
+    const pan = box(Math.hypot(5, 2), 0.25, 8.6, 0x8a3b2a, 0.9);
+    pan.position.set(-9 + s * 2.5, 5, 0); pan.rotation.z = -s * roofSlope; g.add(pan);
+  }
+  const grange = box(12, 6, 9, 0x8c3a2a, 0.7); grange.position.set(6, 3, -2); g.add(grange);
+  const silo = CityAssets.primitives.createWireframeObject(4, 9, 4, 0xb0b6bd, 0.75, 'cylinder');
+  silo.position.set(14, 4.5, -2); g.add(silo);
+  // champs cultivés : bandes régulières (instanciées par bande)
+  const rows = 5 + level;
+  for (let i = 0; i < rows; i++) {
+    const field = CityAssets.primitives.createSolidObject(26, 0.06, 2.2, getMaterial(rng.pick([0x5a6b2a, 0x6d7a30, 0x7d6b2a]), false), 'box');
+    field.position.set(0, 0.04, 8 + i * 2.6); g.add(field);
+  }
+  const tracteur = CityAssets.Life.createVehicle('truck');
+  tracteur.position.set(-2, 0.1, 6); tracteur.rotation.y = Math.PI / 2; g.add(tracteur);
+  const paysan = CityAssets.Life.createInhabitant(InhabitantState.WORKING);
+  paysan.position.set(2, 0.15, 9); g.add(paysan); inhabitants.push(paysan);
+  const sign = makeSign(rng.pick(NAMES.ferme), 6);
+  sign.position.set(-9, 4.6, 4.2); g.add(sign);
+  return { group: g, footprint: PROGRAM_FOOTPRINT.ferme, inhabitants, animated: emptyAnimated(), label: PROGRAM_LABEL.ferme };
+}
+
+function energie(rng: Rng, level: number): BuiltProgram {
+  const g = new THREE.Group();
+  const solaire = rng.chance(0.5);
+  if (solaire) {
+    // champ de panneaux : inclinés plein sud, alignés
+    const rows = 4 + level, cols = 5;
+    for (let r = 0; r < rows; r++) {
+      for (let c = 0; c < cols; c++) {
+        const panel = CityAssets.primitives.createSolidObject(4, 0.12, 2.2, getMaterial(0x1b2a5a, false), 'box');
+        panel.position.set(-12 + c * 5, 1.2, -10 + r * 4);
+        panel.rotation.x = -0.5; g.add(panel);
+        const leg = box(0.15, 1.2, 0.15, 0x888888, 0.9);
+        leg.position.set(-12 + c * 5, 0.6, -10 + r * 4); g.add(leg);
+      }
+    }
+  } else {
+    // éoliennes : mât, nacelle, trois pales (les pales tournent dans la boucle)
+    for (let i = 0; i < 2 + Math.floor(level / 2); i++) {
+      const x = -10 + i * 12, z = rng.range(-8, 8);
+      const mast = CityAssets.primitives.createWireframeObject(1, 26, 1, 0xe8e8e8, 0.85, 'cylinder');
+      mast.position.set(x, 13, z); g.add(mast);
+      const rotor = new THREE.Group();
+      rotor.position.set(x, 26, z);
+      for (let b = 0; b < 3; b++) {
+        const blade = CityAssets.primitives.createSolidObject(0.5, 11, 0.2, getMaterial(0xf5f5f5, false), 'box');
+        blade.position.set(0, 5.5, 0);
+        const holder = new THREE.Group();
+        holder.rotation.z = (b / 3) * Math.PI * 2;
+        holder.add(blade);
+        rotor.add(holder);
+      }
+      rotor.userData = { isRotor: true };
+      g.add(rotor);
+    }
+  }
+  const poste = box(4, 3, 3, 0x9aa0a6, 0.8); poste.position.set(14, 1.5, 10); g.add(poste);
+  const sign = makeSign(solaire ? NAMES.energie[0] : NAMES.energie[1], 6);
+  sign.position.set(14, 3.6, 11.6); g.add(sign);
+  return { group: g, footprint: PROGRAM_FOOTPRINT.energie, inhabitants: [], animated: emptyAnimated(), label: PROGRAM_LABEL.energie };
+}
+
+function stationService(rng: Rng, level: number): BuiltProgram {
+  const g = new THREE.Group();
+  const inhabitants: THREE.Group[] = [];
+  const canopy = CityAssets.primitives.createSolidObject(14, 0.5, 9, getMaterial(0xf0f0f0, false), 'box');
+  canopy.position.set(0, 5, 0); g.add(canopy);
+  for (const [x, z] of [[-6, -3.5], [6, -3.5], [-6, 3.5], [6, 3.5]]) {
+    const col = box(0.5, 5, 0.5, 0xd0d0d0, 0.9); col.position.set(x, 2.5, z); g.add(col);
+  }
+  for (const x of [-3, 3]) {
+    const pump = box(1, 1.8, 0.8, 0x2f7f5f, 0.9); pump.position.set(x, 0.9, 0); g.add(pump);
+  }
+  const shop = box(8, 3.4, 6, 0xe8e8e8, 0.65); shop.position.set(0, 1.7, -9); g.add(shop);
+  const sign = makeSign(NAMES.station_service[0], 6, '#ffffff', 'rgba(20,90,60,0.95)');
+  sign.position.set(0, 3.8, -5.9); g.add(sign);
+  const light = new THREE.PointLight(0xffffee, 1.0, 18); light.position.set(0, 4.5, 0); g.add(light);
+  const car = CityAssets.Life.createVehicle(rng.chance(0.5) ? 'car' : 'taxi');
+  car.position.set(3, 0.1, 2.5); g.add(car);
+  const pompiste = CityAssets.Life.createInhabitant(InhabitantState.WORKING);
+  pompiste.position.set(-3, 0.15, 1.5); g.add(pompiste); inhabitants.push(pompiste);
+  return { group: g, footprint: PROGRAM_FOOTPRINT.station_service, inhabitants, animated: emptyAnimated(), label: PROGRAM_LABEL.station_service };
+}
+
+function telecom(rng: Rng, level: number): BuiltProgram {
+  const g = new THREE.Group();
+  const h = 22 + level * 4;
+  // pylône treillis : quatre montants + entretoises
+  for (const [sx, sz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    const leg = box(0.3, h, 0.3, 0xb8bec4, 0.9);
+    leg.position.set(sx * 1.6, h / 2, sz * 1.6);
+    leg.rotation.z = -sx * 0.02; leg.rotation.x = sz * 0.02;
+    g.add(leg);
+  }
+  for (let i = 1; i < 6; i++) {
+    const ring = box(3.6, 0.15, 3.6, 0xb8bec4, 0.8);
+    ring.position.y = (h / 6) * i; g.add(ring);
+  }
+  for (let i = 0; i < 3; i++) {
+    const a = (i / 3) * Math.PI * 2;
+    const dish = CityAssets.primitives.createWireframeObject(1.6, 1.6, 0.4, 0xdddddd, 0.85, 'cylinder');
+    dish.position.set(Math.cos(a) * 2.2, h - 3, Math.sin(a) * 2.2);
+    dish.rotation.z = Math.PI / 2; dish.rotation.y = a; g.add(dish);
+  }
+  const beacon = CityAssets.primitives.createSolidObject(0.6, 0.6, 0.6, getMaterial(0xff3322, false), 'box');
+  beacon.position.y = h + 0.4; g.add(beacon);
+  const l = new THREE.PointLight(0xff3322, 0.9, 20); l.position.y = h; g.add(l);
+  return { group: g, footprint: PROGRAM_FOOTPRINT.telecom, inhabitants: [], animated: emptyAnimated(), label: PROGRAM_LABEL.telecom };
+}
+
 /** Fabrique un programme. `level` = savoir-faire de l'architecte (1→5). */
+/** Programmes qui sont du paysage plus que du bâti : pas de silhouette LOD. */
+const LANDSCAPE: ReadonlySet<ProgramKind> = new Set(['parc', 'ferme', 'energie', 'stade']);
+
 export function createProgram(kind: ProgramKind, rng: Rng, level: number): BuiltProgram {
   const built = buildProgram(kind, rng, level);
   // l'emprise annoncée est toujours celle du cadastre (cf. PROGRAM_FOOTPRINT)
   built.footprint = PROGRAM_FOOTPRINT[kind];
+  built.group.userData.program = kind;
+  if (LANDSCAPE.has(kind)) built.group.userData.noLod = true;
   return built;
 }
 
@@ -459,5 +934,22 @@ function buildProgram(kind: ProgramKind, rng: Rng, level: number): BuiltProgram 
     case 'clinique': return equipement('clinique', rng, lv);
     case 'mairie': return equipement('mairie', rng, lv);
     case 'parc': return parc(rng, lv);
+    case 'boulangerie': return commerceDeRue(rng, lv, 'boulangerie');
+    case 'cafe': return commerceDeRue(rng, lv, 'cafe');
+    case 'hotel': return hotel(rng, lv);
+    case 'banque': return banque(rng, lv);
+    case 'cinema': return cinema(rng, lv);
+    case 'bibliotheque': return bibliotheque(rng, lv);
+    case 'musee': return musee(rng, lv);
+    case 'stade': return stade(rng, lv);
+    case 'caserne': return caserne(rng, lv, false);
+    case 'police': return caserne(rng, lv, true);
+    case 'poste': return poste(rng, lv);
+    case 'gare': return gare(rng, lv);
+    case 'universite': return universite(rng, lv);
+    case 'ferme': return ferme(rng, lv);
+    case 'energie': return energie(rng, lv);
+    case 'station_service': return stationService(rng, lv);
+    case 'telecom': return telecom(rng, lv);
   }
 }

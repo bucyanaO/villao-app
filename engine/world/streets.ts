@@ -16,6 +16,11 @@ import { addRoad, addPlot, isBuildable, isClear } from './zoning';
 
 export interface Point { x: number; z: number; }
 
+// géométries partagées par toutes les rues du monde
+const DASH_GEO = new THREE.PlaneGeometry(0.22, 2.4);
+const POLE_GEO = new THREE.BoxGeometry(0.16, 4.2, 0.16);
+const HEAD_GEO = new THREE.BoxGeometry(0.34, 0.12, 0.34);
+
 export interface PaveOptions {
   width?: number;
   /** axe central en pointillés */
@@ -105,16 +110,22 @@ export function paveStreet(a: Point, b: Point, opts: PaveOptions = {}): PavedStr
     }
   }
 
-  // 4. axe en pointillés
+  // 4. axe en pointillés — une seule instance pour toute la rue :
+  //    un mesh par tiret, c'était 40 appels de dessin par rue.
   if (opts.centerLine !== false) {
     const n = Math.floor(length / 5);
-    for (let i = 0; i < n; i++) {
-      const t = -length / 2 + 2.5 + i * 5;
-      const dash = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 2.4), sharedMaterials.crosswalkWhite);
-      dash.rotation.x = -Math.PI / 2;
-      dash.rotation.z = -angle;
-      dash.position.set(mid.x + ux * t, 0.045, mid.z + uz * t);
-      group.add(dash);
+    if (n > 0) {
+      const dashes = new THREE.InstancedMesh(DASH_GEO, sharedMaterials.crosswalkWhite, n);
+      const dummy = new THREE.Object3D();
+      for (let i = 0; i < n; i++) {
+        const t = -length / 2 + 2.5 + i * 5;
+        dummy.position.set(mid.x + ux * t, 0.045, mid.z + uz * t);
+        dummy.rotation.set(-Math.PI / 2, 0, -angle);
+        dummy.updateMatrix();
+        dashes.setMatrixAt(i, dummy.matrix);
+      }
+      dashes.instanceMatrix.needsUpdate = true;
+      group.add(dashes);
     }
   }
 
@@ -122,19 +133,32 @@ export function paveStreet(a: Point, b: Point, opts: PaveOptions = {}): PavedStr
   const lampEvery = opts.lampEvery ?? 18;
   if (lampEvery > 0) {
     const poleMat = getMaterial(CITY_THEME.colors.props.lampPost, false);
+    const spots: { x: number; z: number }[] = [];
     const count = Math.floor(length / lampEvery);
     for (let i = 0; i <= count; i++) {
       const t = -length / 2 + i * lampEvery + lampEvery / 2;
       if (Math.abs(t) > length / 2 - 2) continue;
       const s = i % 2 === 0 ? 1 : -1;
-      const px = mid.x + ux * t + nx * s * (width / 2 + 2.4);
-      const pz = mid.z + uz * t + nz * s * (width / 2 + 2.4);
-      const pole = new THREE.Mesh(new THREE.BoxGeometry(0.16, 4.2, 0.16), poleMat);
-      pole.position.set(px, 2.1, pz);
-      group.add(pole);
-      const head = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.12, 0.34), sharedMaterials.lampLight);
-      head.position.set(px, 4.15, pz);
-      group.add(head);
+      spots.push({
+        x: mid.x + ux * t + nx * s * (width / 2 + 2.4),
+        z: mid.z + uz * t + nz * s * (width / 2 + 2.4),
+      });
+    }
+    if (spots.length) {
+      // 2 instances (mâts + luminaires) au lieu de 2 meshes par lampadaire
+      const poles = new THREE.InstancedMesh(POLE_GEO, poleMat, spots.length);
+      const heads = new THREE.InstancedMesh(HEAD_GEO, sharedMaterials.lampLight, spots.length);
+      const dummy = new THREE.Object3D();
+      spots.forEach((p, i) => {
+        dummy.rotation.set(0, 0, 0);
+        dummy.position.set(p.x, 2.1, p.z); dummy.updateMatrix();
+        poles.setMatrixAt(i, dummy.matrix);
+        dummy.position.set(p.x, 4.15, p.z); dummy.updateMatrix();
+        heads.setMatrixAt(i, dummy.matrix);
+      });
+      poles.instanceMatrix.needsUpdate = true;
+      heads.instanceMatrix.needsUpdate = true;
+      group.add(poles, heads);
     }
   }
 

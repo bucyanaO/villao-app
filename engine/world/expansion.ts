@@ -26,6 +26,7 @@ import {
 import { paveStreet, registerStreet, isCorridorClear } from './streets';
 import { createProgram, PROGRAM_FOOTPRINT, PROGRAM_LABEL, type ProgramKind } from './programs';
 import { makeRng, newSeed } from './rng';
+import { attachLod } from './lod';
 import {
   openLedger, record, setFrontier, frontier as ledgerFrontier, save,
   districts as ledgerDistricts, buildings as ledgerBuildings, streets as ledgerStreets,
@@ -106,7 +107,13 @@ export function createExpansionManager(ctx: ExpansionCtx): ExpansionManager {
     if (act.t === 'district') {
       const plan = plans.get(act.id);
       if (!plan) return null;   // le cadastre passe toujours avant le rendu
-      return buildDistrict({ cityGroup: ctx.cityGroup, animRef: ctx.animRef, plan }).group;
+      const built = buildDistrict({ cityGroup: ctx.cityGroup, animRef: ctx.animRef, plan });
+      // chaque bâtiment du quartier a son proxy : de loin, un quartier entier
+      // ne coûte plus que quelques dizaines d'appels de dessin
+      for (const b of ctx.animRef.current.buildingsList) {
+        if (b.userData.actId === act.id) attachLod(b);
+      }
+      return built.group;
     }
     if (act.t === 'street') {
       const paved = paveStreet({ x: act.ax, z: act.az }, { x: act.bx, z: act.bz }, {
@@ -127,6 +134,7 @@ export function createExpansionManager(ctx: ExpansionCtx): ExpansionManager {
     prog.inhabitants.forEach((i) => { i.userData.actId = b.id; ctx.animRef.current.inhabitantsList.push(i); });
     prog.animated.fans.forEach((f) => ctx.animRef.current.fanList.push(f));
     prog.animated.screens.forEach((s) => ctx.animRef.current.screenList.push(s));
+    attachLod(prog.group);
     return prog.group;
   };
 
@@ -134,6 +142,13 @@ export function createExpansionManager(ctx: ExpansionCtx): ExpansionManager {
     const obj = loaded.get(actId);
     if (!obj) return;
     loaded.delete(actId);
+    // les proxies LOD sont des frères : on les retire avec l'acte
+    for (const b of ctx.animRef.current.buildingsList) {
+      if (b.userData.actId === actId && b.userData.lodProxy) {
+        const p = b.userData.lodProxy as THREE.Object3D;
+        p.parent?.remove(p);
+      }
+    }
     obj.traverse((c: any) => { if (c.geometry) c.geometry.dispose(); });
     obj.parent?.remove(obj);
     const A = ctx.animRef.current;

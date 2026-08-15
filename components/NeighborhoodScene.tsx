@@ -33,9 +33,12 @@ import { createAutonomyTicker } from '../engine/agents/autonomy';
 import { createExpansionManager } from '../engine/world/expansion';
 import type { ExpansionManager } from '../engine/world/expansion';
 import { createStudio } from '../engine/agents/studio';
+import { createCitizenLife } from '../engine/agents/citizens';
+import type { CitizenLife } from '../engine/agents/citizens';
+import { updateLod } from '../engine/world/lod';
 import { createTerrain } from '../engine/world/terrain';
 import type { Terrain } from '../engine/world/terrain';
-import { save as saveLedger } from '../engine/world/ledger';
+import { save as saveLedger, acts as ledgerActs } from '../engine/world/ledger';
 import { createHaze } from '../engine/world/haze';
 import type { Haze } from '../engine/world/haze';
 import type { Studio, StudioEvent, Architect } from '../engine/agents/studio';
@@ -52,7 +55,9 @@ const VoxelCityScene: React.FC<{
     setIsDriving?: (isDriving: boolean) => void,
     onTalkToAgent?: (persona: Persona) => void,
     /** Journal du cabinet d'architectes (constructions, promotions, rues ouvertes) */
-    onStudioEvent?: (e: StudioEvent, roster?: Architect[]) => void
+    onStudioEvent?: (e: StudioEvent, roster?: Architect[]) => void,
+    /** Télémétrie de tenue en charge (activée par ?stats=1) */
+    onStats?: (s: { fps: number; draws: number; tris: number; buildings: number; acts: number; frontier: number; tiles: number }) => void
 }> = ({
     lightingPreset = 0, 
     fogLevel = 1.0, 
@@ -64,7 +69,8 @@ const VoxelCityScene: React.FC<{
     setInteractionLabel,
     setIsDriving,
     onTalkToAgent,
-    onStudioEvent
+    onStudioEvent,
+    onStats
 }) => {
     const mountRef = useRef<HTMLDivElement>(null);
     
@@ -112,8 +118,12 @@ const VoxelCityScene: React.FC<{
     const autonomyRef = useRef<{ start(): void; stop(): void } | null>(null);
     // Sol + forêt infinis, et brume volumétrique qui mange le lointain
     const terrainRef = useRef<Terrain | null>(null);
+    // Les citoyens qui vivent leur journée (engine/agents/citizens.ts)
+    const citizensRef = useRef<CitizenLife | null>(null);
     const hazeRef = useRef<Haze | null>(null);
     const terrainClockRef = useRef(0);
+    const statsRef = useRef({ clock: 0, frames: 0 });
+    const lodClockRef = useRef(0);
     
     // Weather System Refs
     const weatherSystemRef = useRef<THREE.Points | null>(null);
@@ -287,6 +297,7 @@ const VoxelCityScene: React.FC<{
 
         // Monde sans bord : le sol et la forêt sont engendrés autour du joueur,
         // et la brume volumétrique dissout la frontière de génération.
+        citizensRef.current = createCitizenLife(scene);
         terrainRef.current = createTerrain(scene);
         terrainRef.current.update({ x: camera.position.x, z: camera.position.z });
         hazeRef.current = createHaze(scene);
@@ -537,6 +548,21 @@ const VoxelCityScene: React.FC<{
             // Update Time
             const d = clockRef.current.getDelta() * timeScale;
             const time = clockRef.current.getElapsedTime() * timeScale;
+
+            // --- LA VIE : domicile → travail → commerces → parc → domicile ---
+            if (citizensRef.current) {
+                const p = walkModeRef.current || vehicleRef.current.current
+                    ? cameraRef.current.position
+                    : (controlsRef.current ? controlsRef.current.target : cameraRef.current.position);
+                citizensRef.current.update(d, time, p as THREE.Vector3);
+            }
+
+            // --- NIVEAU DE DÉTAIL : au loin, les bâtiments deviennent silhouettes ---
+            lodClockRef.current += d;
+            if (lodClockRef.current > 0.5) {
+                lodClockRef.current = 0;
+                updateLod(animRef.current.buildingsList, cameraRef.current, 130);
+            }
 
             // --- SOL / FORÊT INFINIS + BRUME (le lointain ne doit jamais finir) ---
             hazeRef.current?.update(cameraRef.current, time);
@@ -1398,6 +1424,26 @@ const VoxelCityScene: React.FC<{
             });
             
             rendererRef.current.render(sceneRef.current, cameraRef.current);
+
+            // --- TÉLÉMÉTRIE (une fois par seconde, seulement si demandée) ---
+            if (onStats) {
+                statsRef.current.frames++;
+                statsRef.current.clock += d;
+                if (statsRef.current.clock >= 1) {
+                    const info = rendererRef.current.info;
+                    onStats({
+                        fps: Math.round(statsRef.current.frames / statsRef.current.clock),
+                        draws: info.render.calls,
+                        tris: info.render.triangles,
+                        buildings: animRef.current.buildingsList.length,
+                        acts: ledgerActs().length,
+                        frontier: Math.round(expansionRef.current?.frontier() ?? 0),
+                        tiles: terrainRef.current?.tileCount() ?? 0,
+                    });
+                    statsRef.current.frames = 0;
+                    statsRef.current.clock = 0;
+                }
+            }
         };
         animate();
 
@@ -1405,6 +1451,7 @@ const VoxelCityScene: React.FC<{
             autonomyRef.current?.stop();
             studioRef.current?.stop();
             saveLedger();
+            citizensRef.current?.dispose();
             terrainRef.current?.dispose();
             hazeRef.current?.dispose();
             if (requestRef.current) cancelAnimationFrame(requestRef.current);

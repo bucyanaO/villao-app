@@ -8,6 +8,7 @@ import { CITY_THEME } from './theme';
 import { CityAssets, sharedMaterials, getMaterial, getCachedGeometry, LineMerger, MeshMerger, InhabitantState, InstanceData } from './assets';
 import type { AnimState, FxRefs } from './context';
 import { resetZoning, addRoad, addRoadAxis, addRoadRing, occupy, addPlot, setCityRadius } from './world/zoning';
+import { attachLod } from './world/lod';
 
 export interface CityGenCtx {
   cityGroup: THREE.Group;
@@ -539,6 +540,10 @@ export const generateCity = (ctx: CityGenCtx): number => {
     if(propData.benches.length>0){const g=getCachedGeometry(2,0.1,0.6,'box');const m=new THREE.InstancedMesh(g,getMaterial(CITY_THEME.colors.props.wood,false),propData.benches.length);propData.benches.forEach((d,i)=>m.setMatrixAt(i,d.mat));cityGroup.add(m);}
     if(manholeData.length>0){const g=getCachedGeometry(0.6,0.05,0.6,'cylinder',16);const m=new THREE.InstancedMesh(g,sharedMaterials.manholeMetal,manholeData.length);manholeData.forEach((d,i)=>m.setMatrixAt(i,d.mat));cityGroup.add(m);}
     if(potholeData.length>0){const g=getCachedGeometry(0.6,0.02,0.6,'cylinder',7);const m=new THREE.InstancedMesh(g,sharedMaterials.potholeDark,potholeData.length);potholeData.forEach((d,i)=>m.setMatrixAt(i,d.mat));cityGroup.add(m);}
+
+    // Niveau de détail : chaque bâtiment reçoit sa silhouette de remplacement,
+    // qui prendra le relais dès qu'on s'éloigne (cf. engine/world/lod.ts).
+    ctx.animRef.current.buildingsList.forEach((b) => attachLod(b));
 
     setCityRadius(baseRadius);
     return baseRadius;

@@ -1,0 +1,200 @@
+/**
+ * CITOYENS — la ville habitée.
+ *
+ * Les passants du générateur d'origine tournent en rond dans une boîte. Ici,
+ * chaque citoyen a un DOMICILE, un TRAVAIL et une JOURNÉE : il part travailler,
+ * fait ses courses à la boulangerie ou au marché, passe au parc ou au café,
+ * puis rentre. Ses destinations sont de vrais bâtiments du registre — donc la
+ * vie qu'on voit dans la rue est le reflet exact de ce que le cabinet
+ * d'architectes a construit.
+ *
+ * Le peuplement est local : on ne simule que ce qui est autour du joueur (les
+ * autres n'existent pas tant qu'on ne les regarde pas), ce qui reste compatible
+ * avec un monde sans fin.
+ */
+import * as THREE from 'three';
+import { CityAssets, InhabitantState } from '../assets';
+import { buildings as ledgerBuildings, type BuildingAct } from '../world/ledger';
+import { isClear } from '../world/zoning';
+
+type Activity = 'travail' | 'courses' | 'loisir' | 'maison';
+
+const HOMES = new Set(['maison', 'immeuble', 'hotel']);
+const WORKPLACES = new Set([
+  'bureau', 'usine', 'entrepot', 'atelier', 'ferme', 'magasin', 'boulangerie', 'cafe',
+  'marche', 'banque', 'ecole', 'universite', 'clinique', 'mairie', 'poste', 'caserne',
+  'police', 'gare', 'musee', 'bibliotheque', 'cinema', 'hotel', 'station_service',
+]);
+const SHOPS = new Set(['magasin', 'boulangerie', 'marche', 'cafe']);
+const LEISURE = new Set(['parc', 'cafe', 'cinema', 'stade', 'musee', 'bibliotheque']);
+
+interface Citizen {
+  mesh: THREE.Group;
+  home: { x: number; z: number };
+  work: { x: number; z: number } | null;
+  target: { x: number; z: number };
+  activity: Activity;
+  speed: number;
+  wait: number;
+  phase: number;
+}
+
+export interface CitizenLife {
+  /** À appeler chaque frame (peu coûteux : quelques dizaines d'agents). */
+  update(dt: number, time: number, player: THREE.Vector3): void;
+  count(): number;
+  dispose(): void;
+}
+
+export interface CitizenOptions {
+  /** Nombre de citoyens simulés autour du joueur. */
+  population?: number;
+  /** Rayon de simulation (au-delà, on recycle le citoyen ailleurs). */
+  radius?: number;
+  /** Durée d'une journée simulée, en secondes réelles. */
+  dayLength?: number;
+}
+
+const dist = (a: { x: number; z: number }, b: { x: number; z: number }) => Math.hypot(a.x - b.x, a.z - b.z);
+
+export function createCitizenLife(scene: THREE.Object3D, opts: CitizenOptions = {}): CitizenLife {
+  const POP = opts.population ?? 26;
+  const RADIUS = opts.radius ?? 260;
+  const DAY = opts.dayLength ?? 240;
+  const citizens: Citizen[] = [];
+  let rebuildClock = 0;
+  let pool: BuildingAct[] = [];
+
+  const near = (player: THREE.Vector3, set: Set<string>): BuildingAct[] =>
+    pool.filter((b) => set.has(b.kind) && dist(b, player) < RADIUS);
+
+  const pick = <T,>(arr: T[]): T | null => (arr.length ? arr[Math.floor(Math.random() * arr.length)] : null);
+
+  /** Où doit-on être à cette heure-ci ? */
+  const scheduleFor = (hour: number): Activity => {
+    if (hour < 7 || hour >= 21) return 'maison';
+    if (hour < 12) return 'travail';
+    if (hour < 14) return 'courses';
+    if (hour < 18) return 'travail';
+    return 'loisir';
+  };
+
+  const destinationFor = (c: Citizen, activity: Activity, player: THREE.Vector3): { x: number; z: number } => {
+    if (activity === 'maison') return c.home;
+    if (activity === 'travail' && c.work) return c.work;
+    const set = activity === 'courses' ? SHOPS : LEISURE;
+    const b = pick(near(player, set));
+    return b ? { x: b.x, z: b.z } : c.home;
+  };
+
+  const spawn = (player: THREE.Vector3, hour: number): Citizen | null => {
+    const home = pick(near(player, HOMES));
+    if (!home) return null;
+    const work = pick(near(player, WORKPLACES));
+    const mesh = CityAssets.Life.createInhabitant(InhabitantState.WALKING);
+    // on ne l'inscrit PAS dans la liste d'animation globale : sa marche est
+    // dirigée par un but, pas par l'errance aléatoire du décor.
+    mesh.position.set(home.x + (Math.random() - 0.5) * 8, 0.2, home.z + (Math.random() - 0.5) * 8);
+    mesh.userData.isCitizen = true;
+    scene.add(mesh);
+
+    const c: Citizen = {
+      mesh,
+      home: { x: home.x, z: home.z },
+      work: work ? { x: work.x, z: work.z } : null,
+      target: { x: home.x, z: home.z },
+      activity: 'maison',
+      speed: 1.5 + Math.random() * 1.4,
+      wait: Math.random() * 3,
+      phase: Math.random() * 100,
+    };
+    c.activity = scheduleFor(hour);
+    c.target = destinationFor(c, c.activity, player);
+    citizens.push(c);
+    return c;
+  };
+
+  const remove = (c: Citizen) => {
+    c.mesh.parent?.remove(c.mesh);
+    const i = citizens.indexOf(c);
+    if (i >= 0) citizens.splice(i, 1);
+  };
+
+  return {
+    update(dt, time, player) {
+      // le vivier de bâtiments est rafraîchi lentement : le registre bouge peu
+      rebuildClock -= dt;
+      if (rebuildClock <= 0) {
+        rebuildClock = 3;
+        pool = ledgerBuildings().filter((b) => dist(b, player) < RADIUS * 1.4);
+        // recyclage : ceux qu'on a semés trop loin repartent ailleurs
+        for (const c of [...citizens]) {
+          if (dist({ x: c.mesh.position.x, z: c.mesh.position.z }, player) > RADIUS * 1.6) remove(c);
+        }
+        while (citizens.length < POP) { if (!spawn(player, ((time / DAY) * 24) % 24)) break; }
+      }
+
+      const hour = ((time / DAY) * 24) % 24;
+
+      for (const c of citizens) {
+        const p = c.mesh.position;
+
+        // arrivé ? on souffle, puis on se donne un nouveau but
+        const d = Math.hypot(c.target.x - p.x, c.target.z - p.z);
+        if (d < 2.5) {
+          c.wait -= dt;
+          if (c.wait <= 0) {
+            const want = scheduleFor(hour);
+            c.activity = want;
+            c.target = destinationFor(c, want, player);
+            c.wait = 2 + Math.random() * 6;
+          }
+          // sur place : on s'anime doucement, on ne glisse pas
+          if (c.mesh.userData.parts) {
+            c.mesh.userData.parts.leftLeg.rotation.x *= 0.85;
+            c.mesh.userData.parts.rightLeg.rotation.x *= 0.85;
+          }
+          continue;
+        }
+
+        // marche vers le but, avec un contournement simple des obstacles
+        let dirX = (c.target.x - p.x) / d;
+        let dirZ = (c.target.z - p.z) / d;
+        const step = c.speed * dt;
+        const aheadX = p.x + dirX * 2.2;
+        const aheadZ = p.z + dirZ * 2.2;
+        if (!isClear(aheadX, aheadZ, 0.8)) {
+          // obstacle : on longe (rotation d'un quart de tour, alternée)
+          const side = (c.phase % 2 < 1) ? 1 : -1;
+          const nx = -dirZ * side, nz = dirX * side;
+          dirX = (dirX + nx * 1.6) / 2;
+          dirZ = (dirZ + nz * 1.6) / 2;
+          const n = Math.hypot(dirX, dirZ) || 1;
+          dirX /= n; dirZ /= n;
+        }
+        p.x += dirX * step;
+        p.z += dirZ * step;
+        p.y = 0.2;
+
+        const targetRot = Math.atan2(dirX, dirZ);
+        let diff = targetRot - c.mesh.rotation.y;
+        while (diff > Math.PI) diff -= Math.PI * 2;
+        while (diff < -Math.PI) diff += Math.PI * 2;
+        c.mesh.rotation.y += diff * Math.min(1, 6 * dt);
+
+        const parts = c.mesh.userData.parts;
+        if (parts) {
+          const w = Math.sin(time * 7 + c.phase);
+          parts.leftLeg.rotation.x = w * 0.55;
+          parts.rightLeg.rotation.x = -w * 0.55;
+          parts.leftArm.rotation.x = -w * 0.45;
+          parts.rightArm.rotation.x = w * 0.45;
+        }
+      }
+    },
+    count: () => citizens.length,
+    dispose() {
+      for (const c of [...citizens]) remove(c);
+    },
+  };
+}

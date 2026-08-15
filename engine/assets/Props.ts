@@ -77,26 +77,39 @@ export const Props = {
     },
     createFlowerBed: (width: number, depth: number): THREE.Group => {
         const g = new THREE.Group();
-        // Soil
+        // Terre
         const soil = createSolidObject(width, 0.1, depth, getMaterial(0x3e2723, false), 'box');
         soil.position.y = 0.05;
         g.add(soil);
-        
-        // Flowers
+
+        // Fleurs : une seule instance colorée par parterre. En meshes séparés,
+        // un parterre coûtait à lui seul plus de cent appels de dessin.
         const numFlowers = Math.floor(width * depth * 8);
-        const colors = CITY_THEME.colors.nature.flowers;
-        
-        for (let i=0; i<numFlowers; i++) {
-            const color = colors[Math.floor(Math.random() * colors.length)];
-            const size = 0.15 + Math.random() * 0.1;
-            const flow = createSolidObject(size, size, size, getMaterial(color, false), 'box'); // Abstract voxel flowers
-            const fx = (Math.random() - 0.5) * (width - 0.2);
-            const fz = (Math.random() - 0.5) * (depth - 0.2);
-            flow.position.set(fx, 0.1 + size/2, fz);
-            flow.rotation.y = Math.random() * Math.PI;
-            g.add(flow);
+        if (numFlowers > 0) {
+            const colors = CITY_THEME.colors.nature.flowers;
+            const geo = new THREE.BoxGeometry(1, 1, 1);
+            const mat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            const im = new THREE.InstancedMesh(geo, mat, numFlowers);
+            const dummy = new THREE.Object3D();
+            const col = new THREE.Color();
+            for (let i = 0; i < numFlowers; i++) {
+                const size = 0.15 + Math.random() * 0.1;
+                dummy.position.set(
+                    (Math.random() - 0.5) * (width - 0.2),
+                    0.1 + size / 2,
+                    (Math.random() - 0.5) * (depth - 0.2),
+                );
+                dummy.rotation.set(0, Math.random() * Math.PI, 0);
+                dummy.scale.setScalar(size);
+                dummy.updateMatrix();
+                im.setMatrixAt(i, dummy.matrix);
+                im.setColorAt(i, col.setHex(colors[Math.floor(Math.random() * colors.length)]));
+            }
+            im.instanceMatrix.needsUpdate = true;
+            if (im.instanceColor) im.instanceColor.needsUpdate = true;
+            g.add(im);
         }
-        
+
         return g;
     },
     createHolographicTree: (scale: number = 1, specificColors?: number[]): THREE.Group => {

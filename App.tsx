@@ -62,6 +62,8 @@ const App: FC = () => {
   // --- Cabinet d'architectes (ville autonome) ---
   const [studioEvents, setStudioEvents] = useState<StudioEvent[]>([]);
   const [studioRoster, setStudioRoster] = useState<Architect[]>([]);
+  const showStats = q.get('stats') === '1';
+  const [stats, setStats] = useState<{ fps: number; draws: number; tris: number; buildings: number; acts: number; frontier: number; tiles: number } | null>(null);
   const onStudioEvent = (e: StudioEvent, roster?: Architect[]) => {
     setStudioEvents((prev) => [...prev.slice(-40), e]);
     if (roster) setStudioRoster(roster.map((a) => ({ ...a })));
@@ -140,7 +142,16 @@ const App: FC = () => {
         setIsDriving={setIsDriving}
         onTalkToAgent={setTalkingTo}
         onStudioEvent={onStudioEvent}
+        onStats={showStats ? setStats : undefined}
       />
+
+      {showStats && stats && (
+        <div className="pointer-events-none fixed left-4 top-4 z-30 rounded border border-cyan-500/30 bg-slate-950/80 px-3 py-2 font-mono text-[11px] text-cyan-200 backdrop-blur">
+          {stats.fps} fps · {stats.draws} draws · {(stats.tris / 1000).toFixed(0)}k tris<br />
+          {stats.buildings} bâtiments affichés · {stats.acts} actes · {stats.tiles} tuiles<br />
+          frontière {stats.frontier} m
+        </div>
+      )}
 
       {/* Ce que les agents sont en train de bâtir */}
       <StudioPanel events={studioEvents} roster={studioRoster} />
