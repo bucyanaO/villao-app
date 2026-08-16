@@ -906,7 +906,14 @@ const VoxelCityScene: React.FC<{
                     controlsRef.current.update();
                 } else {
                     // Auto Pilot Mode (Orbiting)
-                    if (!controlsFPSRef.current?.isLocked && !vehicleRef.current.current) { // Only if not in FPS/Driving
+                    //
+                    // ATTENTION : « orbite désactivée » ne veut pas dire « pilote
+                    // automatique ». Le mode marche désactive aussi l'orbite, et
+                    // l'on tombait ici : tant que le pointeur n'était pas
+                    // verrouillé, la caméra était arrachée à 40 m d'altitude et
+                    // rebraquée vers le sol à CHAQUE image. D'où ce regard par
+                    // terre qu'il fallait rattraper à la souris.
+                    if (!walkModeRef.current && !controlsFPSRef.current?.isLocked && !vehicleRef.current.current) {
                         const radius = 60 + Math.sin(time * 0.1) * 20;
                         const camX = Math.sin(time * 0.15) * radius;
                         const camZ = Math.cos(time * 0.15) * radius;
@@ -1569,6 +1576,10 @@ const VoxelCityScene: React.FC<{
             if (dirLightRef.current) dirLightRef.current.position.set(p.sunPos[0], p.sunPos[1], p.sunPos[2]);
         }
         if (starsRef.current) starsRef.current.visible = p.night;
+        // les projecteurs des hélicoptères ne s'allument qu'à la nuit tombée
+        for (const ac of animRef.current.airTrafficList) {
+            ac.traverse((o: any) => { if (o.userData?.isSearchBeam) o.visible = p.night; });
+        }
         sharedMaterials.lampLight.opacity = p.night ? 0.9 : 0.1;
         sharedMaterials.vehicleHeadlight.opacity = p.night ? 0.8 : 0.2;
         // Searchlight visibility based on day/night

@@ -190,6 +190,11 @@ export const Life = {
         // chaque nouvel appareil. D'où ces grands plans blancs qui traversaient
         // le ciel toutes les quelques secondes, au rythme de leurs rondes.
         coneMesh.position.set(0, -1 * scale - coneHeight / 2, 0.5 * scale);
+        // Un projecteur ne s'allume que la nuit. De jour, ce grand volume blanc
+        // balayait la caméra à chaque ronde : un éclair d'une fraction de
+        // seconde, revenant toutes les quelques secondes.
+        coneMesh.userData.isSearchBeam = true;
+        coneMesh.visible = false;
         coneMesh.rotation.x = -Math.PI / 8; // Point slightly forward
         group.add(coneMesh);
 
