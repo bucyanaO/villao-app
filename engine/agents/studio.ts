@@ -391,6 +391,26 @@ export function createStudio(ctx: StudioCtx, opts: StudioOptions = {}): Studio {
    * foncier des deux côtés, et le monde peut donc s'étendre indéfiniment.
    */
   /**
+   * Amène une desserte à un site qui n'en a pas.
+   *
+   * Une parcelle isolée donne une maison qu'aucune route ne relie — on en voit
+   * l'effet tout de suite : une rangée posée dans l'herbe, sans accès. On
+   * cherche donc la voirie la plus proche et on trace la desserte, en s'arrêtant
+   * au bord de l'emprise pour ne pas paver le terrain à bâtir.
+   */
+  const ensureAccess = (site: { x: number; z: number }, foot: number): void => {
+    const reach = foot / 2 + 26;
+    if (roadsNear(site, reach).length) return;         // déjà desservi
+    const road = nearestRoadPoint(site, 300);
+    if (!road) return;
+    const dx = site.x - road.x, dz = site.z - road.z;
+    const len = Math.hypot(dx, dz);
+    if (len < 1 || len > 260) return;
+    const stop = Math.max(0, len - (foot / 2 + 4));    // on s'arrête devant la façade
+    ctx.world.openStreet(road, { x: road.x + (dx / len) * stop, z: road.z + (dz / len) * stop }, 8, false);
+  };
+
+  /**
    * Une rue ne s'arrête jamais net dans l'herbe.
    *
    * On essaie d'abord de la BOUCLER : rejoindre une voie existante (autre que
@@ -499,6 +519,12 @@ export function createStudio(ctx: StudioCtx, opts: StudioOptions = {}): Studio {
         return null;
       }
     }
+
+    // Pas de maison sans rue. Une parcelle peut se retrouver isolée (la voie
+    // qui l'avait ouverte n'a pas été tracée, ou le tissu a bougé autour) : on
+    // lui amène alors une desserte depuis la voirie la plus proche, plutôt que
+    // de livrer une rangée de maisons qu'aucune route ne relie.
+    ensureAccess(site, PROGRAM_FOOTPRINT[kind] ?? 20);
 
     const architect = chooseArchitect(kind);
     const ok = ctx.world.place(kind, site.x, site.z, site.angle, architect.skill, architect.name);
