@@ -9,6 +9,7 @@ import { CityAssets, sharedMaterials, getMaterial, getCachedGeometry, LineMerger
 import type { AnimState, FxRefs } from './context';
 import { resetZoning, addRoad, addRoadAxis, addRoadRing, occupy, addPlot, setCityRadius } from './world/zoning';
 import { attachLod } from './world/lod';
+import { paveStreet } from './world/streets';
 
 export interface CityGenCtx {
   cityGroup: THREE.Group;
@@ -313,13 +314,36 @@ export const generateCity = (ctx: CityGenCtx): number => {
         drawRoad(towns[0], towns[1]); drawRoad(towns[0], towns[2]); drawRoad(towns[1], towns[2]);
         const wallColors = CITY_THEME.colors.buildings.walls;
         const styles = ['modern', 'cyberpunk', 'brutalist'] as const;
+        // Chaque bourg a ses PROPRES rues : une croix qui traverse la place, et
+        // une ceinture. Sans elles, les bâtiments se posaient sur un cercle et
+        // les parcelles sur un autre, sans rapport avec la voirie — un semis de
+        // maisons dans l'herbe, qu'aucune route ne desservait.
+        const TOWN_ARM = 78;      // longueur d'un bras de la croix
+        const TOWN_RING = 44;     // demi-côté de la ceinture
+        towns.forEach((t) => {
+            for (const [a, b] of [
+                [{ x: t.x - TOWN_ARM, z: t.z }, { x: t.x + TOWN_ARM, z: t.z }],
+                [{ x: t.x, z: t.z - TOWN_ARM }, { x: t.x, z: t.z + TOWN_ARM }],
+                [{ x: t.x - TOWN_RING, z: t.z - TOWN_RING }, { x: t.x + TOWN_RING, z: t.z - TOWN_RING }],
+                [{ x: t.x - TOWN_RING, z: t.z + TOWN_RING }, { x: t.x + TOWN_RING, z: t.z + TOWN_RING }],
+                [{ x: t.x - TOWN_RING, z: t.z - TOWN_RING }, { x: t.x - TOWN_RING, z: t.z + TOWN_RING }],
+                [{ x: t.x + TOWN_RING, z: t.z - TOWN_RING }, { x: t.x + TOWN_RING, z: t.z + TOWN_RING }],
+            ] as const) {
+                const paved = paveStreet(a, b, {
+                    width: 9, lampEvery: 24,
+                    plots: { size: 14, step: 26, setback: 15, label: 'Bourg' },
+                });
+                cityGroup.add(paved.group);
+            }
+        });
+
         towns.forEach((t, ti) => {
             // central plaza
             occupy(t.x, t.z, 18);
             const pm = new THREE.Matrix4(); pm.setPosition(t.x, 0.04, t.z); sidewalkMerger.addBox(pm, 32, 0.05, 32);
-            // 4 procedural buildings around the plaza (with lit windows)
+            // 4 immeubles AUX ANGLES de la place, façade sur rue
             for (let i = 0; i < 4; i++) {
-                const ang = i * Math.PI / 2 + ti * 0.3;
+                const ang = i * Math.PI / 2 + Math.PI / 4;      // les angles, pas les axes : on ne bouche pas les rues
                 const bx = t.x + Math.cos(ang) * 26, bz = t.z + Math.sin(ang) * 26;
                 const floors = 2 + Math.floor(Math.random() * 4);
                 const wc = wallColors[Math.floor(Math.random() * wallColors.length)];
@@ -337,13 +361,8 @@ export const generateCity = (ctx: CityGenCtx): number => {
             }
             ctx.animRef.current.pois.push(new THREE.Vector3(t.x, 1, t.z));
         });
-        // parcelles : une couronne autour de chaque bourg
-        towns.forEach((t) => {
-            for (let i = 0; i < 10; i++) {
-                const a = (i / 10) * Math.PI * 2;
-                addPlot(t.x + Math.cos(a) * 46, t.z + Math.sin(a) * 46, 14, 'Bourg');
-            }
-        });
+        // (les parcelles sont ouvertes le long des rues, plus sur un cercle :
+        //  une maison se bâtit sur rue, pas au milieu d'un pré)
         baseRadius = 190;
     } else {
         const batchTrafficLightStructure = (x: number, z: number, axis: 'x' | 'z') => {
