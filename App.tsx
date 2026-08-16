@@ -150,6 +150,7 @@ const App: FC = () => {
         setInteractionLabel={setInteractionLabel}
         setIsDriving={setIsDriving}
         onTalkToAgent={setTalkingTo}
+        talkingTo={talkingTo}
         onStudioEvent={onStudioEvent}
         onStats={showStats ? setStats : undefined}
         onMinimap={setMapSample}

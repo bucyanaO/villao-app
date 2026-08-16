@@ -182,6 +182,7 @@ export function createCitizenLife(scene: THREE.Object3D, opts: CitizenOptions): 
         pool = opts.places({ x: player.x, z: player.z }, RADIUS * 1.4);
         // recyclage : ceux qu'on a semés trop loin repartent ailleurs
         for (const c of [...citizens]) {
+          if (c.mesh.userData.talking) continue;      // on ne recycle pas quelqu'un à qui l'on parle
           if (dist({ x: c.mesh.position.x, z: c.mesh.position.z }, player) > RADIUS * 1.6) remove(c);
         }
         while (citizens.length < POP) { if (!spawn(player, ((time / DAY) * 24) % 24)) break; }
@@ -191,6 +192,26 @@ export function createCitizenLife(scene: THREE.Object3D, opts: CitizenOptions): 
 
       for (const c of citizens) {
         const p = c.mesh.position;
+
+        // ON NE PART PAS AU MILIEU D'UNE PHRASE. Tant qu'on lui parle, le
+        // citoyen s'arrête, se tourne vers son interlocuteur et attend.
+        if (c.mesh.userData.talking) {
+          const face = Math.atan2(player.x - p.x, player.z - p.z);
+          let da = face - c.mesh.rotation.y;
+          while (da > Math.PI) da -= Math.PI * 2;
+          while (da < -Math.PI) da += Math.PI * 2;
+          c.mesh.rotation.y += da * Math.min(1, 8 * dt);
+          const parts = c.mesh.userData.parts;
+          if (parts) {
+            parts.leftLeg.rotation.x *= 0.8;
+            parts.rightLeg.rotation.x *= 0.8;
+            // un léger balancement des bras : il écoute, il n'est pas figé
+            const w = Math.sin(time * 2 + c.phase) * 0.08;
+            parts.leftArm.rotation.x = w;
+            parts.rightArm.rotation.x = -w;
+          }
+          continue;
+        }
 
         // arrivé ? on souffle, puis on se donne un nouveau but
         const d = Math.hypot(c.target.x - p.x, c.target.z - p.z);

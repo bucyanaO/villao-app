@@ -17,7 +17,7 @@ import React, { useEffect, useRef } from 'react';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls';
 import { PointerLockControls } from 'three/examples/jsm/controls/PointerLockControls';
-import { sharedMaterials, InhabitantState } from '../engine/assets';
+import { sharedMaterials, InhabitantState, CityAssets } from '../engine/assets';
 import { SKY_VERTEX_SHADER, SKY_FRAGMENT_SHADER } from '../engine/shaders';
 import { LIGHTING_PRESETS as presets } from '../engine/presets';
 import type { AICommand } from '../engine/types';
@@ -60,6 +60,8 @@ const VoxelCityScene: React.FC<{
     setInteractionLabel?: (label: string | null) => void,
     setIsDriving?: (isDriving: boolean) => void,
     onTalkToAgent?: (persona: Persona) => void,
+    /** La conversation en cours (null = aucune) : commande la mise en scène. */
+    talkingTo?: Persona | null,
     /** Journal du cabinet d'architectes (constructions, promotions, rues ouvertes) */
     onStudioEvent?: (e: StudioEvent, roster?: Architect[], report?: CityReport) => void,
     /** Télémétrie de tenue en charge (activée par ?stats=1) */
@@ -77,6 +79,7 @@ const VoxelCityScene: React.FC<{
     setInteractionLabel,
     setIsDriving,
     onTalkToAgent,
+    talkingTo = null,
     onStudioEvent,
     onStats,
     onMinimap
@@ -98,6 +101,12 @@ const VoxelCityScene: React.FC<{
     // « l'orbite est désactivée » (le mode marche la désactive aussi)
     const autoPilotRef = useRef(autoPilot);
     useEffect(() => { autoPilotRef.current = autoPilot; }, [autoPilot]);
+    // mise en scène d'une conversation (interlocuteur, mon personnage, cadrage)
+    const talkTargetRef = useRef<THREE.Object3D | null>(null);
+    const dialogueRef = useRef<{
+        npc: THREE.Object3D; avatar: THREE.Group;
+        camPos: THREE.Vector3; camRot: THREE.Euler;
+    } | null>(null);
 
     // Movement State (FPS)
     const moveState = useRef({
@@ -476,6 +485,7 @@ const VoxelCityScene: React.FC<{
                     const persona = target.userData.persona as Persona | undefined;
                     if (persona && onTalkToAgent) {
                         controlsFPSRef.current?.unlock();
+                        talkTargetRef.current = target;   // pour la mise en scène du dialogue
                         onTalkToAgent(persona);
                     }
                 }
@@ -837,6 +847,8 @@ const VoxelCityScene: React.FC<{
             // non : le clavier suffit (Z/S avancent, Q/D tournent). Exiger le clic
             // de verrouillage revenait à rendre les touches inertes tant qu'on
             // n'avait pas touché la souris.
+            // pendant une conversation, on ne bouge pas : le plan est posé
+            else if (dialogueRef.current) { /* on écoute */ }
             else if (controlsFPSRef.current && !autoPilotRef.current && (walkModeRef.current || controlsFPSRef.current.isLocked)) {
                 // Look (Right Stick)
                 if (gp) {
@@ -1627,6 +1639,59 @@ const VoxelCityScene: React.FC<{
             }
         }
     }, [lightingPreset, fogLevel, weather]);
+
+    /**
+     * MISE EN SCÈNE D'UNE CONVERSATION.
+     *
+     * Parler à quelqu'un en vue subjective, c'est parler à un mur : on ne voit
+     * ni son visage ni le sien. Le temps de l'échange, on passe donc à un plan
+     * de trois quarts — mon personnage de dos au premier plan, l'interlocuteur
+     * face à nous — et l'on rend la caméra exactement où on l'avait prise.
+     */
+    useEffect(() => {
+        const cam = cameraRef.current;
+        if (!cam) return;
+
+        if (talkingTo && talkTargetRef.current && !dialogueRef.current) {
+            const npc = talkTargetRef.current;
+            npc.userData.talking = true;                 // il reste, il ne s'en va pas
+
+            const npcPos = new THREE.Vector3();
+            npc.getWorldPosition(npcPos);
+            const me = { x: cam.position.x, z: cam.position.z };
+
+            // mon personnage prend ma place au sol, tourné vers mon interlocuteur
+            const avatar = CityAssets.Life.createInhabitant(InhabitantState.IDLE);
+            avatar.position.set(me.x, 0.2, me.z);
+            avatar.rotation.y = Math.atan2(npcPos.x - me.x, npcPos.z - me.z);
+            avatar.userData.isPlayerAvatar = true;
+            cityGroupRef.current?.add(avatar);
+
+            dialogueRef.current = {
+                npc, avatar,
+                camPos: cam.position.clone(),
+                camRot: cam.rotation.clone(),
+            };
+
+            // le cadrage : en retrait, décalé sur le côté, à hauteur d'épaule
+            const dx = npcPos.x - me.x, dz = npcPos.z - me.z;
+            const len = Math.hypot(dx, dz) || 1;
+            const ux = dx / len, uz = dz / len;
+            const px = -uz, pz = ux;                     // perpendiculaire, pour le trois-quarts
+            cam.position.set(me.x - ux * 2.4 + px * 2.6, 2.4, me.z - uz * 2.4 + pz * 2.6);
+            cam.lookAt(me.x + ux * len * 0.55, 1.5, me.z + uz * len * 0.55);
+        }
+
+        if (!talkingTo && dialogueRef.current) {
+            const d = dialogueRef.current;
+            d.npc.userData.talking = false;              // il peut reprendre sa journée
+            d.avatar.parent?.remove(d.avatar);
+            cam.position.copy(d.camPos);
+            cam.rotation.copy(d.camRot);
+            dialogueRef.current = null;
+            talkTargetRef.current = null;
+        }
+    }, [talkingTo]);
 
     // --- 3. CONTROLS MODE SWITCHING (UPDATED) ---
     useEffect(() => {
