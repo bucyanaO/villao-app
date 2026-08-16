@@ -156,18 +156,50 @@ function maison(rng: Rng, level: number): BuiltProgram {
     g.add(litWindows(w - 2, i * fh + fh * 0.55, d / 2 + 0.06, 2, rng));
   }
 
-  // entrée + jardin
+  // Cheminée et auvent d'entrée : deux détails qui suffisent à ce qu'une
+  // maison cesse de se lire comme une boîte posée au sol.
+  const chimney = box(0.9, 1.8, 0.9, roofColor, 0.95);
+  chimney.position.set(w * 0.28, top + 1.9, -d * 0.18); g.add(chimney);
+  const canopy = box(3, 0.18, 1.5, roofColor, 0.9);
+  canopy.position.set(0, 2.5, d / 2 + 0.7); g.add(canopy);
+  for (const s of [-1, 1]) {
+    const post = box(0.16, 2.5, 0.16, wall, 0.9);
+    post.position.set(s * 1.3, 1.25, d / 2 + 1.3); g.add(post);
+  }
+
+  // Une annexe une fois sur deux : c'est elle qui casse la répétition d'une rue
+  // entière de pavillons identiques.
+  if (rng.chance(0.5)) {
+    const side = rng.chance(0.5) ? 1 : -1;
+    const aw = 3.6, ad = 5.4, ah = 2.6;
+    const annex = box(aw, ah, ad, wall, 0.55);
+    annex.position.set(side * (w / 2 + aw / 2 - 0.2), ah / 2, -d * 0.1); g.add(annex);
+    const flat = box(aw + 0.4, 0.2, ad + 0.4, roofColor, 0.9);
+    flat.position.set(annex.position.x, ah + 0.1, annex.position.z); g.add(flat);
+  }
+
+  // entrée + jardin — clôture, haie et arbre pour TOUTES les maisons, quel que
+  // soit le niveau de l'architecte : une maison neuve n'est pas un terrain vague.
   const path = CityAssets.primitives.createSolidObject(1.6, 0.08, 4, sharedMaterials.sidewalkConcrete, 'box');
   path.position.set(0, 0.05, d / 2 + 2); g.add(path);
   const light = new THREE.PointLight(0xffdda0, 0.7, 7);
   light.position.set(0, 2.6, d / 2 + 0.4); g.add(light);
-  if (level >= 2) {
-    const hedge = CityAssets.Props.createFlowerBed(w - 1, 1.2);
-    hedge.position.set(0, 0, d / 2 + 4.4); g.add(hedge);
+
+  const fenceZ = d / 2 + 4.6;
+  const rail = box(w + 2, 0.12, 0.12, roofColor, 0.8);
+  rail.position.set(0, 0.85, fenceZ); g.add(rail);
+  for (const s of [-1, 0, 1]) {
+    if (s === 0) continue;                       // l'allée passe au milieu
+    const post = box(0.14, 1, 0.14, roofColor, 0.85);
+    post.position.set(s * (w / 2 + 1), 0.5, fenceZ); g.add(post);
   }
+  const hedge = CityAssets.Props.createFlowerBed(w / 2 - 0.5, 1.1);
+  hedge.position.set(-(w / 4 + 0.6), 0, fenceZ - 1.1); g.add(hedge);
+  const tree = CityAssets.Props.createHolographicTree(rng.range(1, 1.6), CITY_THEME.colors.props.greenFoliage);
+  tree.position.set(w / 2 + 2.2, 0, d / 2 + 1.5); g.add(tree);
   if (level >= 3) {
-    const tree = CityAssets.Props.createHolographicTree(rng.range(1, 1.6), CITY_THEME.colors.props.greenFoliage);
-    tree.position.set(w / 2 + 2.2, 0, d / 2 + 1.5); g.add(tree);
+    const hedge2 = CityAssets.Props.createFlowerBed(w / 2 - 0.5, 1.1);
+    hedge2.position.set(w / 4 + 0.6, 0, fenceZ - 1.1); g.add(hedge2);
   }
   if (level >= 4) {
     const car = CityAssets.Life.createVehicle('car');
