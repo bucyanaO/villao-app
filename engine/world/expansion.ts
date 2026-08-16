@@ -53,7 +53,8 @@ export interface ExpansionManager {
   /** Inscrit ET matérialise un bâtiment (utilisé par le cabinet d'architectes). */
   place(kind: ProgramKind, x: number, z: number, angle: number, level: number, by: string): boolean;
   /** Ouvre une voie nouvelle (et les parcelles qui la bordent). */
-  openStreet(a: { x: number; z: number }, b: { x: number; z: number }, width?: number): void;
+  /** Trace une voie. Retourne false si le couloir n'était pas libre. */
+  openStreet(a: { x: number; z: number }, b: { x: number; z: number }, width?: number, plots?: boolean): boolean;
   count(): number;
   frontier(): number;
   /** Recensement des programmes bâtis dans les quartiers (hors registre). */
@@ -314,10 +315,11 @@ export function createExpansionManager(ctx: ExpansionCtx): ExpansionManager {
       return true;
     },
 
-    openStreet(a, b, width = 10) {
-      link(a, b, width, true);
+    openStreet(a, b, width = 10, plots = true) {
+      if (!link(a, b, width, plots)) return false;
       ctx.onGroundChanged?.((a.x + b.x) / 2, (a.z + b.z) / 2, Math.hypot(b.x - a.x, b.z - a.z) / 2 + 30);
       save();
+      return true;
     },
 
     count: () => ledgerDistricts().length,

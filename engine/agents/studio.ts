@@ -390,6 +390,51 @@ export function createStudio(ctx: StudioCtx, opts: StudioOptions = {}): Studio {
    * exactement comme une ville gagne du terrain. Chaque rue ouverte crée du
    * foncier des deux côtés, et le monde peut donc s'étendre indéfiniment.
    */
+  /**
+   * Une rue ne s'arrête jamais net dans l'herbe.
+   *
+   * On essaie d'abord de la BOUCLER : rejoindre une voie existante (autre que
+   * celle d'où l'on vient), ce qui donne un vrai maillage plutôt qu'un peigne
+   * de branches mortes. Si le couloir est encombré, on la termine par une
+   * PLACE DE RETOURNEMENT — un losange de voirie, comme au bout d'une impasse
+   * réelle. Dans les deux cas, plus de bord de route tranché net.
+   *
+   * Retourne true si la rue a pu être bouclée sur le réseau.
+   */
+  const closeStreetEnd = (from: { x: number; z: number }, end: { x: number; z: number }): boolean => {
+    const dx = end.x - from.x, dz = end.z - from.z;
+    const len = Math.hypot(dx, dz) || 1;
+    const ux = dx / len, uz = dz / len;
+
+    // 1) rejoindre le réseau
+    let best: { x: number; z: number } | null = null;
+    let bestD = Infinity;
+    for (const s of roadsNear(end, 200)) {
+      const sx = s.x2 - s.x1, sz = s.z2 - s.z1;
+      const l2 = sx * sx + sz * sz;
+      let t = l2 > 0 ? ((end.x - s.x1) * sx + (end.z - s.z1) * sz) / l2 : 0;
+      t = Math.max(0, Math.min(1, t));
+      const px = s.x1 + t * sx, pz = s.z1 + t * sz;
+      const d = Math.hypot(px - end.x, pz - end.z);
+      if (d < 14) return true;                                   // déjà sur une voie
+      if (Math.hypot(px - from.x, pz - from.z) < 80) continue;    // c'est la rue d'où l'on vient
+      if (d < bestD) { bestD = d; best = { x: px, z: pz }; }
+    }
+    if (best && bestD < 190 && ctx.world.openStreet(end, best, 10, false)) return true;
+
+    // 2) place de retournement
+    const c = { x: end.x + ux * 9, z: end.z + uz * 9 };
+    const r = 9;
+    const pts = [
+      { x: c.x - ux * r, z: c.z - uz * r },
+      { x: c.x - uz * r, z: c.z + ux * r },
+      { x: c.x + ux * r, z: c.z + uz * r },
+      { x: c.x + uz * r, z: c.z - ux * r },
+    ];
+    for (let i = 0; i < 4; i++) ctx.world.openStreet(pts[i], pts[(i + 1) % 4], 8, false);
+    return false;
+  };
+
   const openNewStreet = (kind: ProgramKind = 'maison'): boolean => {
     const R = Math.max(80, cityRadius());
     const player = ctx.playerPos();
@@ -426,9 +471,10 @@ export function createStudio(ctx: StudioCtx, opts: StudioOptions = {}): Studio {
       for (const a of candidates) {
         const end = traceCorridor(anchor, a, 10, 240, 60);
         if (!end) continue;
-        ctx.world.openStreet(anchor, end, 10);
+        if (!ctx.world.openStreet(anchor, end, 10)) continue;
         streetsOpened++;
-        say(`Nadia fait tracer une rue nouvelle (${streetsOpened}) — ${Math.round(Math.hypot(end.x - anchor.x, end.z - anchor.z))} m de foncier rouvert.`);
+        const bouclee = closeStreetEnd(anchor, end);
+        say(`Nadia fait tracer une rue nouvelle (${streetsOpened}) — ${Math.round(Math.hypot(end.x - anchor.x, end.z - anchor.z))} m de foncier rouvert${bouclee ? ', bouclée sur le réseau' : ', terminée par une place de retournement'}.`);
         return true;
       }
     }

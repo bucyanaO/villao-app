@@ -311,6 +311,18 @@ export function roadEndpointsNear(p: { x: number; z: number }, radius: number): 
   return out;
 }
 
+/**
+ * Le point est-il sur du BÂTI ? (les routes, elles, sont ignorées : une voie a
+ * parfaitement le droit d'en croiser une autre — pas de passer sur une maison.)
+ */
+export function isBuilt(x: number, z: number, margin = 0, ignoreOwner?: number): boolean {
+  for (const f of occupiedNear(x, z, margin)) {
+    if (ignoreOwner !== undefined && f.owner === ignoreOwner) continue;
+    if (Math.hypot(x - f.x, z - f.z) < f.r + margin) return true;
+  }
+  return false;
+}
+
 /** Le point est-il dégagé (ni bâti, ni chaussée) avec cette marge ? */
 export function isClear(x: number, z: number, clearance = 2.5): boolean {
   if (isOnRoad(x, z, clearance)) return false;

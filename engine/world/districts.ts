@@ -16,7 +16,7 @@ import * as THREE from 'three';
 import { CITY_THEME } from '../theme';
 import { CityAssets, InhabitantState, sharedMaterials } from '../assets';
 import type { AnimState } from '../context';
-import { occupy, addPlot, isBuildable, addRoad } from './zoning';
+import { occupy, addPlot, isBuildable, addRoad, isBuilt } from './zoning';
 import { paveStreet } from './streets';
 import { makeSignPost } from './signage';
 import { createProgram, PROGRAM_FOOTPRINT, type ProgramKind } from './programs';
@@ -89,7 +89,7 @@ export interface DistrictPlan {
   angle: number;
   theme: DistrictTheme;
   seed: number;
-  streets: { a: { x: number; z: number }; b: { x: number; z: number }; w: number }[];
+  streets: { a: { x: number; z: number }; b: { x: number; z: number }; w: number; skip?: boolean }[];
   slots: { x: number; z: number; kind: Slot; footprint: number; face: number; level: number; skip?: boolean }[];
   freeSlots: { x: number; z: number }[];
 }
@@ -104,9 +104,20 @@ export function planDistrict(args: {
   const { step, row: rowOffset } = THEME_GRID[theme];
   const mix = THEME_MIX[theme];
 
+  // Un quartier est CEINTURÉ. Sans cette boucle, son avenue et sa transversale
+  // s'arrêtaient net dans l'herbe : quatre bords de route tranchés, qu'on voit
+  // de loin. La ceinture passe au large des rangées bâties (recul + demi-emprise
+  // + marge), donc elle ne déclasse aucun lot.
+  const ringF = HALF + 6;                      // demi-longueur, le long de l'avenue
+  const ringS = rowOffset + 30;                // demi-largeur, de part et d'autre
+  const at = (f: number, s: number) => ({ x: center.x + fx * f + sx * s, z: center.z + fz * f + sz * s });
   const streets = [
-    { a: { x: center.x - fx * HALF, z: center.z - fz * HALF }, b: { x: center.x + fx * HALF, z: center.z + fz * HALF }, w: STREET_W },
-    { a: { x: center.x - sx * 34, z: center.z - sz * 34 }, b: { x: center.x + sx * 34, z: center.z + sz * 34 }, w: 9 },
+    { a: at(-ringF, 0), b: at(ringF, 0), w: STREET_W },          // l'avenue
+    { a: at(0, -ringS), b: at(0, ringS), w: 9 },                 // la transversale
+    { a: at(-ringF, -ringS), b: at(ringF, -ringS), w: 9 },       // ceinture, côté 1
+    { a: at(-ringF, ringS), b: at(ringF, ringS), w: 9 },         // ceinture, côté 2
+    { a: at(-ringF, -ringS), b: at(-ringF, ringS), w: 9 },       // ceinture, bout 1
+    { a: at(ringF, -ringS), b: at(ringF, ringS), w: 9 },         // ceinture, bout 2
   ];
 
   const perRow = Math.max(2, Math.floor((HALF * 2 - 10) / step));
@@ -131,12 +142,31 @@ export function planDistrict(args: {
 }
 
 /**
+ * Une voie de quartier ne se pave pas par-dessus le bâti d'un voisin : on
+ * échantillonne son tracé, et si elle rencontre une maison déjà debout, elle
+ * n'est pas ouverte. (Croiser une autre route, en revanche, est normal.)
+ */
+function crossesBuilt(s: DistrictPlan['streets'][number], owner: number): boolean {
+  const dx = s.b.x - s.a.x, dz = s.b.z - s.a.z;
+  const len = Math.hypot(dx, dz);
+  const steps = Math.max(2, Math.ceil(len / 6));
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    if (isBuilt(s.a.x + dx * t, s.a.z + dz * t, s.w / 2 + 1, owner)) return true;
+  }
+  return false;
+}
+
+/**
  * Inscrit le plan au cadastre (routes, emprises, parcelles libres) SANS créer
  * un seul mesh. Appelé pour tous les quartiers du registre, y compris ceux qui
  * sont trop loin pour être affichés.
  */
 export function registerDistrictPlan(plan: DistrictPlan): void {
-  for (const s of plan.streets) addRoad(s.a.x, s.a.z, s.b.x, s.b.z, s.w, plan.actId);
+  for (const s of plan.streets) {
+    if (crossesBuilt(s, plan.actId)) { s.skip = true; continue; }
+    addRoad(s.a.x, s.a.z, s.b.x, s.b.z, s.w, plan.actId);
+  }
   occupy(plan.center.x, plan.center.z, 6, plan.actId);
   for (const slot of plan.slots) {
     if (!isBuildable(slot.x, slot.z, slot.footprint, plan.actId)) { slot.skip = true; continue; }
@@ -285,6 +315,7 @@ export function buildDistrict(args: BuildDistrictArgs): DistrictResult {
 
   // 1) les rues (le cadastre les connaît déjà : ici, c'est du pavage)
   for (const st of plan.streets) {
+    if (st.skip) continue;      // voie refusée au cadastre : rien à paver
     const paved = paveStreet(st.a, st.b, {
       width: st.w,
       lampEvery: st.w >= 10 ? 16 : 0,
