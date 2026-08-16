@@ -4,6 +4,10 @@ FROM node:20-alpine AS build
 WORKDIR /app
 ARG VITE_AGENT_ENDPOINT=https://villao-gateway.miha.run/api/agent/chat
 ENV VITE_AGENT_ENDPOINT=$VITE_AGENT_ENDPOINT
+# Le nom du modèle se cuit aussi : sans lui, le site déployé réclamait un modèle
+# que la passerelle ne sert pas.
+ARG VITE_AGENT_MODEL=gemma4:31b-cloud
+ENV VITE_AGENT_MODEL=$VITE_AGENT_MODEL
 COPY package.json package-lock.json* ./
 RUN npm install
 COPY . .

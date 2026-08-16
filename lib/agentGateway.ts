@@ -24,7 +24,10 @@ export interface AgentTurn {
 
 const env = (import.meta as any).env ?? {};
 const ENDPOINT: string | undefined = env.VITE_AGENT_ENDPOINT;
-const MODEL: string = env.VITE_AGENT_MODEL || 'qwen2.5:3b';
+// Défaut = le modèle que sert réellement la passerelle du VPS. Un nom qu'elle ne
+// connaît pas lui fait répondre 404, et la console affiche « erreur de connexion »
+// alors que la passerelle se porte très bien.
+const MODEL: string = env.VITE_AGENT_MODEL || 'gemma4:31b-cloud';
 const API_KEY: string | undefined = env.VITE_AGENT_KEY;
 
 function buildSystem(persona: Persona, telemetry?: Record<string, unknown>): string {

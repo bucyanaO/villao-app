@@ -45,8 +45,8 @@ const AgentChat: FC<AgentChatProps> = ({ persona, telemetry, onClose }) => {
     try {
       const reply = await callAgent({ persona, messages: next, telemetry });
       setMessages([...next, { role: 'assistant', content: reply }]);
-    } catch {
-      setMessages([...next, { role: 'assistant', content: 'Erreur de connexion au modèle. Vérifie VITE_AGENT_ENDPOINT et réessaie.' }]);
+    } catch (e) {
+      setMessages([...next, { role: 'assistant', content: `(Passerelle IA injoignable — ${(e as Error).message})` }]);
     } finally {
       setIsThinking(false);
     }

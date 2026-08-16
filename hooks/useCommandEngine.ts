@@ -127,7 +127,9 @@ export function useCommandEngine(opts: CommandEngineOptions): CommandEngine {
         const reply = await callAgent({ persona: CITY_PERSONA, messages: [{ role: 'user', content: prompt }], telemetry: opts.getTelemetry() as any });
         pushChat('system', reply, 'IA');
       } catch (e) {
-        pushChat('system', 'Erreur de connexion au modèle. Vérifie la passerelle VPS.', 'ERREUR');
+        // On dit ce qui a échoué : « erreur de connexion » tout court envoie
+        // chercher une panne réseau alors que c'est souvent un 404 de modèle.
+        pushChat('system', `Passerelle IA injoignable — ${(e as Error).message}`, 'ERREUR');
       }
       return;
     }
