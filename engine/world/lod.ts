@@ -103,6 +103,17 @@ export function attachLod(building: THREE.Object3D): void {
   box.getCenter(center);
   if (size.x < 0.5 || size.y < 0.5) return;
 
+  // La boîte englobante prend TOUT : enseignes en drapeau, marquises, auvents,
+  // antennes. Une silhouette calée dessus déborde alors sur le voisin, et l'on
+  // croit voir un immeuble posé sur une maison. On la ramène donc à l'emprise
+  // que le cadastre a réellement réservée — au sol, une silhouette ne dépasse
+  // jamais de sa parcelle.
+  const foot = building.userData.footprint as number | undefined;
+  if (foot) {
+    size.x = Math.min(size.x, foot);
+    size.z = Math.min(size.z, foot);
+  }
+
   const color = dominantColor(building);
   const proxy = new THREE.Group();
   const mesh = new THREE.Mesh(proxyGeo, fillMat(color));
@@ -119,6 +130,7 @@ export function attachLod(building: THREE.Object3D): void {
 
   // le proxy est un frère du bâtiment, exprimé dans le même repère
   const local = building.parent.worldToLocal(center.clone());
+  if (foot) { local.x = building.position.x; local.z = building.position.z; }  // recentré sur le bâtiment
   proxy.position.copy(local);
   proxy.visible = false;
   proxy.userData = { isLodProxy: true, actId: building.userData.actId };
@@ -138,10 +150,12 @@ export function updateLod(buildings: readonly THREE.Object3D[], camera: THREE.Ob
     if (!proxy) continue;
     if (b.userData.forcedHidden) continue;         // retiré par le God Mode
     const dx = b.position.x - cam.x, dz = b.position.z - cam.z, dy = b.position.y - cam.y;
+    // On réaffirme les deux visibilités à chaque passage. Le test « si ça a
+    // changé » économisait deux écritures, mais dès qu'un autre code touchait
+    // à `b.visible`, la silhouette restait allumée PAR-DESSUS le bâtiment
+    // détaillé : un grand volume translucide posé sur les maisons.
     const detailed = dx * dx + dy * dy + dz * dz < near2;
-    if (b.visible !== detailed) {
-      b.visible = detailed;
-      proxy.visible = !detailed;
-    }
+    b.visible = detailed;
+    proxy.visible = !detailed;
   }
 }

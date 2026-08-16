@@ -17,7 +17,7 @@
  */
 import * as THREE from 'three';
 import type { AnimState } from '../context';
-import { setCityRadius, refreshPlotMarkers, occupy, isOnRoad, consumePlotsAt } from './zoning';
+import { setCityRadius, refreshPlotMarkers, occupy, isOnRoad, consumePlotsAt, setPlayerReserve } from './zoning';
 import {
   buildDistrict, planDistrict, registerDistrictPlan,
   DISTRICT_THEMES, DISTRICT_HALF, DISTRICT_LABEL,
@@ -131,7 +131,7 @@ export function createExpansionManager(ctx: ExpansionCtx): ExpansionManager {
     const prog = createProgram(b.kind as ProgramKind, makeRng(b.seed), b.level);
     prog.group.position.set(b.x, 0, b.z);
     prog.group.rotation.y = b.angle;
-    prog.group.userData = { ...prog.group.userData, isBuilding: true, expanded: false, actId: b.id, program: b.kind, by: b.by };
+    prog.group.userData = { ...prog.group.userData, isBuilding: true, expanded: false, actId: b.id, program: b.kind, by: b.by, footprint: prog.footprint };
     ctx.cityGroup.add(prog.group);
     ctx.animRef.current.buildingsList.push(prog.group);
     prog.inhabitants.forEach((i) => { i.userData.actId = b.id; ctx.animRef.current.inhabitantsList.push(i); });
@@ -269,6 +269,7 @@ export function createExpansionManager(ctx: ExpansionCtx): ExpansionManager {
   return {
     update(playerPos: THREE.Vector3) {
       const player = { x: playerPos.x, z: playerPos.z };
+      setPlayerReserve(player.x, player.z);   // on ne bâtit pas sur le joueur
       const d = Math.hypot(player.x, player.z);
       if (d > ledgerFrontier() - 90) grow(Math.atan2(player.x, player.z));
       stream(player);
