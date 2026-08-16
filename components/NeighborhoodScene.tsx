@@ -39,6 +39,7 @@ import type { Traffic } from '../engine/agents/traffic';
 import type { CitizenLife } from '../engine/agents/citizens';
 import { updateLod } from '../engine/world/lod';
 import { walkAgainstBuildings } from '../engine/world/walk';
+import { findOpenGround } from '../engine/world/zoning';
 import { sampleMap } from '../engine/world/minimap';
 import type { MapSample } from '../engine/world/minimap';
 import { createTerrain } from '../engine/world/terrain';
@@ -864,6 +865,15 @@ const VoxelCityScene: React.FC<{
 
                 const speed = moveState.current.run ? 150.0 : 60.0; // Run vs Walk
 
+                // Q et D TOURNENT le regard au lieu de faire un pas de côté : la
+                // caméra suit la direction dans laquelle on va, sans avoir à
+                // corriger le cadrage à la souris (qui reste disponible). On peut
+                // tourner en marchant comme en courant.
+                if (inputRight !== 0) {
+                    cameraRef.current.rotation.y -= inputRight * (moveState.current.run ? 2.4 : 1.7) * d;
+                    inputRight = 0;
+                }
+
                 // Apply Input to Velocity
                 if (inputForward !== 0) velocity.z -= inputForward * speed * d;
                 if (inputRight !== 0) velocity.x -= inputRight * speed * d;
@@ -1603,14 +1613,20 @@ const VoxelCityScene: React.FC<{
         if (walkMode) {
              // Activate FPS
              controlsRef.current.enabled = false;
-             
-             // Initial FPS position (center of city, ground level)
-             // Only reset if we were far away (orbiting)
-             if (cameraRef.current.position.y > 10) {
-                 cameraRef.current.position.set(0, 1.7, 0); 
-                 cameraRef.current.lookAt(0, 1.7, -10);
-             }
-             
+
+             // On se POSE : hauteur d'yeux, regard à l'horizontale, sur un terrain
+             // dégagé. Sans ça on héritait de la vue orbitale — plongée, parfois
+             // roulis — et il fallait rattraper le cadrage à la souris avant même
+             // de pouvoir avancer.
+             const cam = cameraRef.current;
+             const dir = new THREE.Vector3();
+             cam.getWorldDirection(dir);
+             const yaw = Math.atan2(-dir.x, -dir.z);   // on ne garde que le cap
+             if (cam.position.y > 10) cam.position.set(0, 1.7, 0);
+             const ground = findOpenGround({ x: cam.position.x, z: cam.position.z }, 1.2);
+             cam.position.set(ground.x, 1.7, ground.z);
+             cam.rotation.set(0, yaw, 0, 'YXZ');
+
              // NO AUTO LOCK: We rely on the user clicking to lock to prevent browser warnings.
              
         } else {

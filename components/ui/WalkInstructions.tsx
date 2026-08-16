@@ -49,6 +49,12 @@ const WalkInstructions: FC<WalkInstructionsProps> = ({ gamepadConnected, setWalk
             <div className="h-10 w-px bg-white/20"></div>
             <div className="flex flex-col gap-2 text-xs text-gray-300">
                 <div className="flex items-center gap-2">
+                    <span className="font-bold border border-white/30 px-2 rounded bg-white/10">Z / S</span> <span>AVANCER · RECULER</span>
+                </div>
+                <div className="flex items-center gap-2">
+                    <span className="font-bold border border-white/30 px-2 rounded bg-white/10">Q / D</span> <span>TOURNER</span>
+                </div>
+                <div className="flex items-center gap-2">
                     <span className="font-bold border border-white/30 px-2 rounded bg-white/10">ESPACE</span> <span>SAUTER</span>
                 </div>
                 <div className="flex items-center gap-2">

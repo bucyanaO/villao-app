@@ -184,9 +184,12 @@ export const Life = {
         const coneHeight = 15 * scale;
         const coneGeo = getCachedGeometry(3 * scale, coneHeight, 3 * scale, 'cone');
         const coneMesh = new THREE.Mesh(coneGeo, sharedMaterials.searchLightBeam);
-        // Cone geometry is centered, move it down
-        coneMesh.geometry.translate(0, -coneHeight/2, 0); 
-        coneMesh.position.set(0, -1 * scale, 0.5 * scale);
+        // Le faisceau part sous l'appareil. On DÉCALE LE MESH, jamais la
+        // géométrie : celle-ci est partagée par le cache, et la translater
+        // déplaçait le faisceau de tous les hélicoptères — un peu plus loin à
+        // chaque nouvel appareil. D'où ces grands plans blancs qui traversaient
+        // le ciel toutes les quelques secondes, au rythme de leurs rondes.
+        coneMesh.position.set(0, -1 * scale - coneHeight / 2, 0.5 * scale);
         coneMesh.rotation.x = -Math.PI / 8; // Point slightly forward
         group.add(coneMesh);
 
