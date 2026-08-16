@@ -26,6 +26,8 @@ interface Car {
   forward: boolean;
   t: number;
   speed: number;
+  id: number;          // ancienneté : sert de règle de priorité aux carrefours
+  half: number;        // demi-longueur (un bus n'est pas une berline)
 }
 
 export interface Traffic {
@@ -37,12 +39,13 @@ export interface Traffic {
 const nodeKey = (x: number, z: number) => `${Math.round(x / 2)}:${Math.round(z / 2)}`;
 
 export function createTraffic(scene: THREE.Object3D, opts: { cars?: number; radius?: number } = {}): Traffic {
-  const MAX = opts.cars ?? 11;
+  const MAX = opts.cars ?? 18;   // seule circulation de la ville, désormais
   const RADIUS = opts.radius ?? 320;
   const cars: Car[] = [];
   let edges: Edge[] = [];
   const nodes = new Map<string, Edge[]>();
   let rebuild = 0;
+  let nextId = 0;
 
   const buildGraph = (player: THREE.Vector3) => {
     edges = [];
@@ -93,8 +96,15 @@ export function createTraffic(scene: THREE.Object3D, opts: { cars?: number; radi
       mesh, edge: e, forward: Math.random() > 0.5,
       t: Math.random() * e.len,
       speed: 6 + Math.random() * 6,
+      id: nextId++,
+      half: type === 'bus' ? 5 : type === 'truck' ? 4 : 2.6,
     };
+    // on n'apparaît jamais dans la tôle d'une autre voiture
     place(car);
+    if (cars.some((o) => o.mesh.position.distanceToSquared(car.mesh.position) < 64)) {
+      scene.remove(mesh);
+      return false;
+    }
     cars.push(car);
     return true;
   };
@@ -142,16 +152,39 @@ export function createTraffic(scene: THREE.Object3D, opts: { cars?: number; radi
         while (cars.length < MAX) { if (!spawn(player)) break; }
       }
 
-      // On regarde la voiture devant soi sur le même tronçon : sans cela, tout
-      // le monde se superpose au premier carrefour.
+      // Personne ne se rentre dedans. On raisonne en espace-monde (et non le
+      // long d'un tronçon) : c'est le seul moyen de voir aussi la voiture qui
+      // traverse le carrefour ou qui vient de tourner devant nous. Aux
+      // croisements, la plus ancienne passe — un ordre strict, donc jamais
+      // deux voitures qui s'attendent l'une l'autre indéfiniment.
       for (const c of cars) {
-        let gap = Infinity;
+        const hx = c.forward ? c.edge.ux : -c.edge.ux;
+        const hz = c.forward ? c.edge.uz : -c.edge.uz;
+        let free = Infinity;                       // distance libre devant le capot
+
+        const consider = (px: number, pz: number, lane: number, half: number) => {
+          const dx = px - c.mesh.position.x, dz = pz - c.mesh.position.z;
+          const ahead = dx * hx + dz * hz - c.half - half;  // pare-chocs à pare-chocs
+          if (ahead <= -c.half) return;                     // il est derrière nous
+          if (Math.abs(dx * hz - dz * hx) > lane) return;   // pas sur notre trajectoire
+          if (ahead < free) free = ahead;
+        };
+
         for (const o of cars) {
-          if (o === c || o.edge !== c.edge || o.forward !== c.forward) continue;
-          const d = o.t - c.t;
-          if (d > 0 && d < gap) gap = d;
+          if (o === c) continue;
+          const sameLane = o.edge === c.edge && o.forward === c.forward;
+          if (!sameLane && o.id > c.id) continue;  // c'est à lui de nous céder le passage
+          consider(o.mesh.position.x, o.mesh.position.z, sameLane ? 2.4 : 3.4, o.half);
+          if (!sameLane) {
+            // là où il sera dans une seconde : on freine avant l'accrochage,
+            // pas au moment où les carrosseries se touchent.
+            const ox = o.forward ? o.edge.ux : -o.edge.ux;
+            const oz = o.forward ? o.edge.uz : -o.edge.uz;
+            consider(o.mesh.position.x + ox * o.speed, o.mesh.position.z + oz * o.speed, 3.4, o.half);
+          }
         }
-        const target = gap < 7 ? 0 : gap < 16 ? c.speed * 0.45 : c.speed;
+
+        const target = free < 2.5 ? 0 : free < 12 ? c.speed * 0.45 : c.speed;
         c.t += target * dt;
         if (c.t >= c.edge.len) turn(c);
         place(c);

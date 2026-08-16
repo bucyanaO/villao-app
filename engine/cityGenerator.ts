@@ -253,16 +253,10 @@ export const generateCity = (ctx: CityGenCtx): number => {
         const stemM = new THREE.Matrix4(); stemM.setPosition(0, 0.02, (STEM_Z_START + STEM_Z_END) / 2); asphaltMerger.addBox(stemM, ROAD_WIDTH, 0.05, STEM_Z_START - STEM_Z_END);
         const dashLen = 2, gapLen = 2; const stemDist = STEM_Z_START - STEM_Z_END; const numDashes = Math.floor(stemDist / (dashLen + gapLen));
         for(let k=0; k<numDashes; k++) { const pz = STEM_Z_END + k*(dashLen+gapLen) + dashLen; const m = new THREE.Matrix4(); m.setPosition(0, 0.03, pz); markingMerger.addBox(m, 0.2, 0.05, dashLen); }
-        const laneOffset = 2.5; const vehicleCount = 8; 
-        for(let i=0; i<vehicleCount; i++) {
-            const dir = i % 2 === 0 ? 1 : -1; const v = CityAssets.Life.createVehicle('car');
-            const xPos = dir === 1 ? -laneOffset : laneOffset; const zPos = STEM_Z_END + Math.random() * (STEM_Z_START - STEM_Z_END);
-            v.position.set(xPos, 0.1, zPos); v.rotation.y = dir === 1 ? Math.PI : 0;
-            v.userData.lane = { type: 'stem', dir: dir, limitZMin: STEM_Z_END, limitZMax: STEM_Z_START, xPos: xPos };
-            v.userData.speed = 8 + Math.random() * 5; v.userData.maxSpeed = v.userData.speed;
-            v.userData.type = 'vehicle'; // Metadata
-            cityGroup.add(v); ctx.animRef.current.vehiclesList.push(v);
-        }
+        // (plus de voitures « sur rail » ici : toute la circulation passe par
+        //  `agents/traffic.ts`, qui roule sur le vrai réseau et où chacun voit
+        //  les autres. Deux systèmes aveugles l'un à l'autre, c'était la
+        //  garantie de voir des voitures se traverser.)
         const segments = 48;
         for (let i = 0; i < segments; i++) {
             const theta1 = (i / segments) * Math.PI * 2; const theta2 = ((i + 1) / segments) * Math.PI * 2;
@@ -491,16 +485,7 @@ export const generateCity = (ctx: CityGenCtx): number => {
             roadBorderMerger.addLine(new THREE.Vector3(offset-gap/2, 0.05, -mapSize/2), new THREE.Vector3(offset-gap/2, 0.05, mapSize/2)); roadBorderMerger.addLine(new THREE.Vector3(offset+gap/2, 0.05, -mapSize/2), new THREE.Vector3(offset+gap/2, 0.05, mapSize/2)); roadBorderMerger.addLine(new THREE.Vector3(-mapSize/2, 0.05, offset-gap/2), new THREE.Vector3(mapSize/2, 0.05, offset-gap/2)); roadBorderMerger.addLine(new THREE.Vector3(-mapSize/2, 0.05, offset+gap/2), new THREE.Vector3(mapSize/2, 0.05, offset+gap/2));
             const dashLen = 2; const gapLen = 2; const numDashes = Math.floor(mapSize / (dashLen + gapLen));
             for(let k=0; k<numDashes; k++) { const pos = -mapSize/2 + (dashLen+gapLen)/2 + k*(dashLen+gapLen); const vm = new THREE.Matrix4(); vm.setPosition(offset, 0.06, pos); markingMerger.addBox(vm, 0.2, 0.005, dashLen); const hm = new THREE.Matrix4(); hm.setPosition(pos, 0.06, offset); markingMerger.addBox(hm, dashLen, 0.005, 0.2); }
-            for(let k=0; k<2; k++) {
-                const vAxis = 'z'; const vPos = -mapSize/2 + Math.random()*mapSize; const vDir = Math.random()>0.5 ? 1 : -1; const vX = offset + (vDir===1 ? -2.5 : 2.5);
-                const v = CityAssets.Life.createVehicle(Math.random()>0.8?'bus':'car'); v.position.set(vX, 0.1, vPos); v.rotation.y = vDir===1 ? 0 : Math.PI; v.userData.lane = { axis: vAxis, dir: vDir, stopZ: [] }; v.userData.speed = 5 + Math.random()*5; v.userData.maxSpeed = v.userData.speed;
-                v.userData.type = 'vehicle'; // Metadata
-                cityGroup.add(v); ctx.animRef.current.vehiclesList.push(v);
-                const hAxis = 'x'; const hPos = -mapSize/2 + Math.random()*mapSize; const hDir = Math.random()>0.5 ? 1 : -1; const hZ = offset + (hDir===1 ? 2.5 : -2.5);
-                const v2 = CityAssets.Life.createVehicle('car'); v2.position.set(hPos, 0.1, hZ); v2.rotation.y = hDir===1 ? Math.PI/2 : -Math.PI/2; v2.userData.lane = { axis: hAxis, dir: hDir, stopX: [] }; v2.userData.speed = 5 + Math.random()*5; v2.userData.maxSpeed = v2.userData.speed;
-                v2.userData.type = 'vehicle'; // Metadata
-                cityGroup.add(v2); ctx.animRef.current.vehiclesList.push(v2);
-            }
+            // (idem : la grille ne porte plus ses propres voitures)
        }
        // --- PARCELLES : la première couronne d'îlots vides autour de la grille.
        // La ville s'étend donc vers l'extérieur, jamais dans les rues existantes.

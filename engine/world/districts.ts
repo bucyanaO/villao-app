@@ -336,16 +336,9 @@ export function buildDistrict(args: BuildDistrictArgs): DistrictResult {
     animRef.current.inhabitantsList.push(p);
   }
 
-  const main = plan.streets[0];
-  const v = CityAssets.Life.createVehicle(theme === 'industriel' ? 'truck' : 'car');
-  v.position.set(center.x + sx * 2.5, 0.1, center.z + sz * 2.5);
-  v.rotation.y = angle;
-  v.userData.type = 'vehicle';
-  v.userData.actId = actId;
-  v.userData.speed = rng.range(4, 8); v.userData.maxSpeed = v.userData.speed;
-  v.userData.districtLane = { ax: main.a.x, az: main.a.z, bx: main.b.x, bz: main.b.z, dir: 1, angle };
-  group.add(v);
-  animRef.current.vehiclesList.push(v);
+  // Pas de navette propre au quartier : ses rues sont au cadastre, donc la
+  // circulation générale (`agents/traffic.ts`) y passe déjà — et elle, au
+  // moins, voit les autres voitures.
 
   // panneau d'entrée + point d'intérêt (les habitants viennent le regarder)
   const sign = makeSignPost(DISTRICT_LABEL[theme]);
