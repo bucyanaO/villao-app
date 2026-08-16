@@ -43,7 +43,7 @@ import { sampleMap } from '../engine/world/minimap';
 import type { MapSample } from '../engine/world/minimap';
 import { createTerrain } from '../engine/world/terrain';
 import type { Terrain } from '../engine/world/terrain';
-import { save as saveLedger, acts as ledgerActs, districts as ledgerDistricts, clearLedger } from '../engine/world/ledger';
+import { save as saveLedger, acts as ledgerActs, districts as ledgerDistricts, clearLedger, restoreLedger } from '../engine/world/ledger';
 import { createHaze } from '../engine/world/haze';
 import type { Haze } from '../engine/world/haze';
 import type { Studio, StudioEvent, Architect, CityReport } from '../engine/agents/studio';
@@ -1652,6 +1652,15 @@ const VoxelCityScene: React.FC<{
         // ?reset=1 : on repart d'une ville vierge (registre + progression des
         // architectes effacés) — pratique pour une démo depuis zéro.
         const query = new URLSearchParams(window.location.search);
+        // ?restore=1 : rappelle la ville que le dernier ?reset=1 avait mise de côté.
+        if (query.get('restore') === '1') {
+            console.info(restoreLedger(architecturalStyle)
+                ? '[ville] ville précédente restaurée'
+                : '[ville] aucune ville mise de côté à restaurer');
+            query.delete('restore');
+            const q = query.toString();
+            window.history.replaceState({}, '', window.location.pathname + (q ? `?${q}` : ''));
+        }
         if (query.get('reset') === '1') {
             clearLedger(architecturalStyle);
             try { localStorage.removeItem('villao.studio.v1'); } catch { /* pas de stockage */ }

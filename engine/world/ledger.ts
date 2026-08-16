@@ -110,11 +110,39 @@ export function save(): void {
   try { s.setItem(KEY(state.style), JSON.stringify(state)); dirty = false; } catch { /* quota */ }
 }
 
-/** Efface la ville construite pour ce style (retour à la ville d'origine). */
+const BACKUP = (style: string) => `${KEY(style)}.avant-reset`;
+
+/**
+ * Efface la ville construite pour ce style (retour à la ville d'origine).
+ *
+ * Une ville, c'est des heures de construction : on n'en jette pas une sans
+ * filet. L'ancienne est mise de côté avant l'effacement, et `restoreLedger()`
+ * la rappelle (?restore=1). Une seule reprise en arrière, ça suffit à réparer
+ * une fausse manœuvre.
+ */
 export function clearLedger(style: string): void {
   const s = storage();
-  if (s) { try { s.removeItem(KEY(style)); } catch { /* ignore */ } }
+  if (s) {
+    try {
+      const previous = s.getItem(KEY(style));
+      if (previous) s.setItem(BACKUP(style), previous);
+      s.removeItem(KEY(style));
+    } catch { /* ignore */ }
+  }
   state = { version: 2, style, frontier: state.frontier, nextId: 1, acts: [] };
+}
+
+/** Rappelle la ville mise de côté par le dernier effacement. */
+export function restoreLedger(style: string): boolean {
+  const s = storage();
+  if (!s) return false;
+  try {
+    const saved = s.getItem(BACKUP(style));
+    if (!saved) return false;
+    s.setItem(KEY(style), saved);
+    s.removeItem(BACKUP(style));
+    return true;
+  } catch { return false; }
 }
 
 /** Statistiques par programme (utilisées par le plan d'urbanisme du cabinet). */
