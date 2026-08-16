@@ -42,10 +42,16 @@ const proxyFloors = (() => {
 const fillCache = new Map<number, THREE.Material>();
 const lineCache = new Map<number, THREE.Material>();
 
+/**
+ * La silhouette est OPAQUE. Translucide, elle laissait voir au travers : les
+ * boîtes se chevauchaient, on croyait voir des fantômes de verre empilés sur
+ * les maisons au lieu d'une ville au loin. Un bâtiment lointain doit ressembler
+ * à un bâtiment.
+ */
 function fillMat(color: number): THREE.Material {
   let m = fillCache.get(color);
   if (!m) {
-    m = new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.4, depthWrite: true });
+    m = new THREE.MeshLambertMaterial({ color });
     fillCache.set(color, m);
   }
   return m;
@@ -144,7 +150,16 @@ export function attachLod(building: THREE.Object3D): void {
  */
 export function updateLod(buildings: readonly THREE.Object3D[], camera: THREE.Object3D, nearDist = 130): void {
   const cam = camera.position;
-  const near2 = nearDist * nearDist;
+  // Deux seuils, pas un. Avec un seuil unique, un bâtiment posé pile à la
+  // frontière clignote entre détail et silhouette à chaque pas de côté ; en
+  // repassant au détail un peu plus près qu'on ne l'avait quitté, la bascule
+  // ne peut plus osciller.
+  //
+  // (Repousser la frontière à 175 m a été essayé : la bascule se cachait bien
+  //  mieux dans la brume, mais on tombait de 60 à 34 images/s sur une ville de
+  //  45 bâtiments. Ce n'est pas un échange acceptable.)
+  const enter2 = nearDist * nearDist;                    // on repasse au détail
+  const leave2 = (nearDist * 1.12) ** 2;                 // on passe à la silhouette
   for (const b of buildings) {
     const proxy = b.userData.lodProxy as THREE.Group | undefined;
     if (!proxy) continue;
@@ -154,7 +169,8 @@ export function updateLod(buildings: readonly THREE.Object3D[], camera: THREE.Ob
     // changé » économisait deux écritures, mais dès qu'un autre code touchait
     // à `b.visible`, la silhouette restait allumée PAR-DESSUS le bâtiment
     // détaillé : un grand volume translucide posé sur les maisons.
-    const detailed = dx * dx + dy * dy + dz * dz < near2;
+    const d2 = dx * dx + dy * dy + dz * dz;
+    const detailed = b.visible ? d2 < leave2 : d2 < enter2;
     b.visible = detailed;
     proxy.visible = !detailed;
   }
