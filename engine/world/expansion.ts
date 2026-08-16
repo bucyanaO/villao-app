@@ -17,7 +17,7 @@
  */
 import * as THREE from 'three';
 import type { AnimState } from '../context';
-import { setCityRadius, refreshPlotMarkers, occupy, isOnRoad, consumePlotsAt, setPlayerReserve } from './zoning';
+import { setCityRadius, refreshPlotMarkers, occupy, isOnRoad, isBuilt, consumePlotsAt, setPlayerReserve } from './zoning';
 import {
   buildDistrict, planDistrict, registerDistrictPlan,
   DISTRICT_THEMES, DISTRICT_HALF, DISTRICT_LABEL,
@@ -296,10 +296,14 @@ export function createExpansionManager(ctx: ExpansionCtx): ExpansionManager {
     grow,
 
     place(kind: ProgramKind, x: number, z: number, angle: number, level: number, by: string) {
-      // dernier verrou : jamais un ouvrage sur la chaussée, même si une voie a
-      // été percée après l'ouverture de la parcelle
+      // Dernier verrou : jamais un ouvrage sur la chaussée, même si une voie a
+      // été percée après l'ouverture de la parcelle — ni sur un terrain DÉJÀ
+      // BÂTI. Entre le choix du site et la livraison, un autre chantier a pu
+      // prendre la place ; sans ce contrôle, on obtenait deux magasins
+      // superposés au même endroit.
       const foot = PROGRAM_FOOTPRINT[kind] ?? 20;
       if (isOnRoad(x, z, foot / 2)) return false;
+      if (isBuilt(x, z, foot / 2 - 1)) return false;
       const act = record({ t: 'building', kind, x, z, angle, level, seed: newSeed(), by }) as BuildingAct;
       registerAct(act);
       consumePlotsAt(x, z, foot / 2);
