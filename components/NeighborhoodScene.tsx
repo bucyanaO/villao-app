@@ -94,6 +94,10 @@ const VoxelCityScene: React.FC<{
     // Track Walk Mode state for event listeners
     const walkModeRef = useRef(walkMode);
     useEffect(() => { walkModeRef.current = walkMode; }, [walkMode]);
+    // le survol de drone est un MODE à part entière : il ne se déduit pas de
+    // « l'orbite est désactivée » (le mode marche la désactive aussi)
+    const autoPilotRef = useRef(autoPilot);
+    useEffect(() => { autoPilotRef.current = autoPilot; }, [autoPilot]);
 
     // Movement State (FPS)
     const moveState = useRef({
@@ -719,7 +723,9 @@ const VoxelCityScene: React.FC<{
 
 
             // --- INTERACTION RAYCASTING (Center Screen) ---
-            if (controlsFPSRef.current && controlsFPSRef.current.isLocked && !vehicleRef.current.current) {
+            // (là aussi : viser au centre de l'écran marche sans verrouiller le
+            //  pointeur, sinon la touche F resterait morte au clavier seul)
+            if (controlsFPSRef.current && (walkModeRef.current || controlsFPSRef.current.isLocked) && !vehicleRef.current.current) {
                 raycaster.setFromCamera(new THREE.Vector2(0, 0), cameraRef.current);
                 // la ville ET les passants (qui vivent dans leur propre groupe)
                 const targets: THREE.Object3D[] = [...(cityGroupRef.current?.children || [])];
@@ -827,7 +833,11 @@ const VoxelCityScene: React.FC<{
             }
             
             // --- CAMERA CONTROLS UPDATE (FPS) ---
-            else if (controlsFPSRef.current && controlsFPSRef.current.isLocked) {
+            // On marche dès qu'on est en mode marche, verrouillage du pointeur ou
+            // non : le clavier suffit (Z/S avancent, Q/D tournent). Exiger le clic
+            // de verrouillage revenait à rendre les touches inertes tant qu'on
+            // n'avait pas touché la souris.
+            else if (controlsFPSRef.current && !autoPilotRef.current && (walkModeRef.current || controlsFPSRef.current.isLocked)) {
                 // Look (Right Stick)
                 if (gp) {
                     const lookSpeed = 2.0 * d;
@@ -912,8 +922,9 @@ const VoxelCityScene: React.FC<{
                     // l'on tombait ici : tant que le pointeur n'était pas
                     // verrouillé, la caméra était arrachée à 40 m d'altitude et
                     // rebraquée vers le sol à CHAQUE image. D'où ce regard par
-                    // terre qu'il fallait rattraper à la souris.
-                    if (!walkModeRef.current && !controlsFPSRef.current?.isLocked && !vehicleRef.current.current) {
+                    // terre qu'il fallait rattraper à la souris. C'est donc le
+                    // MODE DRONE qui commande ce survol, lui seul.
+                    if (autoPilotRef.current && !controlsFPSRef.current?.isLocked && !vehicleRef.current.current) {
                         const radius = 60 + Math.sin(time * 0.1) * 20;
                         const camX = Math.sin(time * 0.15) * radius;
                         const camZ = Math.cos(time * 0.15) * radius;
