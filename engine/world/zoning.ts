@@ -72,6 +72,15 @@ function forEachCell(x: number, z: number, reach: number, fn: (key: string) => v
   for (let i = i0; i <= i1; i++) for (let j = j0; j <= j1; j++) fn(cellKey(i, j));
 }
 
+/**
+ * Le joueur tient de la place. Sans cette réserve, le cabinet d'architectes
+ * finit par bâtir exactement là où l'on se tient : on se retrouve enfermé dans
+ * la maçonnerie, écran noir. Elle suit le joueur et n'interdit que la
+ * construction — les passants, eux, peuvent toujours nous approcher.
+ */
+let reserve: { x: number; z: number; r: number } | null = null;
+export function setPlayerReserve(x: number, z: number, r = 9): void { reserve = { x, z, r }; }
+
 export function zoningStyle(): string { return Z.style; }
 export function cityRadius(): number { return Z.cityRadius; }
 export function setCityRadius(r: number): void { Z.cityRadius = Math.max(Z.cityRadius, r); }
@@ -193,6 +202,7 @@ function occupiedNear(x: number, z: number, reach: number): Footprint[] {
  */
 export function isBuildable(x: number, z: number, size = 13, ignoreOwner?: number): boolean {
   const half = size / 2;
+  if (reserve && Math.hypot(x - reserve.x, z - reserve.z) < half + reserve.r) return false;
   if (isOnRoad(x, z, half + 1.5)) return false;
   for (const f of occupiedNear(x, z, half)) {
     if (ignoreOwner !== undefined && f.owner === ignoreOwner) continue;

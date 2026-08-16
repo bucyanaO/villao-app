@@ -38,6 +38,7 @@ import { createTraffic } from '../engine/agents/traffic';
 import type { Traffic } from '../engine/agents/traffic';
 import type { CitizenLife } from '../engine/agents/citizens';
 import { updateLod } from '../engine/world/lod';
+import { walkAgainstBuildings } from '../engine/world/walk';
 import { sampleMap } from '../engine/world/minimap';
 import type { MapSample } from '../engine/world/minimap';
 import { createTerrain } from '../engine/world/terrain';
@@ -867,9 +868,16 @@ const VoxelCityScene: React.FC<{
                 if (inputForward !== 0) velocity.z -= inputForward * speed * d;
                 if (inputRight !== 0) velocity.x -= inputRight * speed * d;
 
-                // Move
+                // Move — puis on refuse d'entrer dans un mur (sinon : écran noir)
+                const wasX = cameraRef.current.position.x, wasZ = cameraRef.current.position.z;
                 controlsFPSRef.current.moveRight( - velocity.x * d );
                 controlsFPSRef.current.moveForward( - velocity.z * d );
+                const solid = walkAgainstBuildings(
+                    animRef.current.buildingsList, wasX, wasZ,
+                    cameraRef.current.position.x, cameraRef.current.position.z,
+                );
+                cameraRef.current.position.x = solid.x;
+                cameraRef.current.position.z = solid.z;
                 
                 // Y Position / Jump / Floor Collision
                 cameraRef.current.position.y += velocity.y * d;
