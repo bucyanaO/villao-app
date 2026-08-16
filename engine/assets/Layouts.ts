@@ -27,12 +27,18 @@ const addWindows = (box: THREE.Group, w: number, d: number, fh: number) => {
 export const Layouts = {
     createSmallTechnicalRoom: (floorW: number, floorD: number, animatedObjects: { fans: THREE.Group[], screens: THREE.Mesh[] } = {fans:[], screens:[]}): { furniture: THREE.Group, inhabitants: THREE.Group[] } => {
         const furniture = new THREE.Group();
+        // marqué INTÉRIEUR : au-delà de quelques dizaines de mètres on ne voit plus
+        // le mobilier, et c'est lui qui coûte l'essentiel des appels de dessin.
+        furniture.userData.isInterior = true;
         const inhabitants: THREE.Group[] = [];
         RoomAssembler.fillRoom(furniture, 'office', floorW, floorD, inhabitants, animatedObjects);
         return { furniture, inhabitants };
     },
     createGroundFloorLayout: (type: string, w: number, d: number, animatedObjects: { fans: THREE.Group[], screens: THREE.Mesh[] } = {fans:[], screens:[]}): { furniture: THREE.Group, inhabitants: THREE.Group[] } => {
         const furniture = new THREE.Group();
+        // marqué INTÉRIEUR : au-delà de quelques dizaines de mètres on ne voit plus
+        // le mobilier, et c'est lui qui coûte l'essentiel des appels de dessin.
+        furniture.userData.isInterior = true;
         const inhabitants: THREE.Group[] = [];
         if (type === 'retail') {
             const shelfCount = Math.floor(w / 3);
@@ -53,12 +59,18 @@ export const Layouts = {
     },
     createOfficeLayout: (w: number, d: number, animatedObjects: { fans: THREE.Group[], screens: THREE.Mesh[] } = {fans:[], screens:[]}): { furniture: THREE.Group, inhabitants: THREE.Group[] } => {
         const furniture = new THREE.Group();
+        // marqué INTÉRIEUR : au-delà de quelques dizaines de mètres on ne voit plus
+        // le mobilier, et c'est lui qui coûte l'essentiel des appels de dessin.
+        furniture.userData.isInterior = true;
         const inhabitants: THREE.Group[] = [];
         RoomAssembler.fillRoom(furniture, 'office', w, d, inhabitants, animatedObjects);
         return { furniture, inhabitants };
     },
     createApartment2Bed: (w: number, d: number, animatedObjects: { fans: THREE.Group[], screens: THREE.Mesh[] } = {fans:[], screens:[]}): { furniture: THREE.Group, inhabitants: THREE.Group[] } => {
          const furniture = new THREE.Group();
+        // marqué INTÉRIEUR : au-delà de quelques dizaines de mètres on ne voit plus
+        // le mobilier, et c'est lui qui coûte l'essentiel des appels de dessin.
+        furniture.userData.isInterior = true;
          const inhabitants: THREE.Group[] = [];
          const livingGroup = new THREE.Group(); livingGroup.position.set(-w/4, 0, 0);
          RoomAssembler.fillRoom(livingGroup, 'living', w/2, d, inhabitants, animatedObjects);
@@ -70,12 +82,18 @@ export const Layouts = {
     },
     createOneBedroomApartment: (w: number, d: number, animatedObjects: { fans: THREE.Group[], screens: THREE.Mesh[] } = {fans:[], screens:[]}): { furniture: THREE.Group, inhabitants: THREE.Group[] } => {
          const furniture = new THREE.Group();
+        // marqué INTÉRIEUR : au-delà de quelques dizaines de mètres on ne voit plus
+        // le mobilier, et c'est lui qui coûte l'essentiel des appels de dessin.
+        furniture.userData.isInterior = true;
          const inhabitants: THREE.Group[] = [];
          RoomAssembler.fillRoom(furniture, 'bedroom', w, d, inhabitants, animatedObjects);
          return { furniture, inhabitants };
     },
     createStudioApartment: (w: number, d: number, animatedObjects: { fans: THREE.Group[], screens: THREE.Mesh[] } = {fans:[], screens:[]}): { furniture: THREE.Group, inhabitants: THREE.Group[] } => {
          const furniture = new THREE.Group();
+        // marqué INTÉRIEUR : au-delà de quelques dizaines de mètres on ne voit plus
+        // le mobilier, et c'est lui qui coûte l'essentiel des appels de dessin.
+        furniture.userData.isInterior = true;
          const inhabitants: THREE.Group[] = [];
          RoomAssembler.fillRoom(furniture, 'living', w, d, inhabitants, animatedObjects);
          const k = Furniture.createDetailedKitchen(); k.position.set(w/3, 0, d/3); k.rotation.y = Math.PI; furniture.add(k);

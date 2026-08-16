@@ -610,7 +610,7 @@ const VoxelCityScene: React.FC<{
             lodClockRef.current += d;
             if (lodClockRef.current > 0.5) {
                 lodClockRef.current = 0;
-                updateLod(animRef.current.buildingsList, cameraRef.current, 130);
+                updateLod(animRef.current.buildingsList, cameraRef.current);
             }
 
             // --- SOL / FORÊT INFINIS + BRUME (le lointain ne doit jamais finir) ---

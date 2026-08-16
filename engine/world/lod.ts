@@ -138,6 +138,13 @@ export function attachLod(building: THREE.Object3D): void {
   const local = building.parent.worldToLocal(center.clone());
   if (foot) { local.x = building.position.x; local.z = building.position.z; }  // recentré sur le bâtiment
   proxy.position.copy(local);
+
+  // Les intérieurs sont recensés une fois pour toutes : c'est le niveau
+  // intermédiaire, celui qui permet de garder les vrais bâtiments loin
+  // sans payer leur mobilier.
+  const interiors: THREE.Object3D[] = [];
+  building.traverse((o) => { if (o.userData?.isInterior) interiors.push(o); });
+  building.userData.lodInteriors = interiors;
   proxy.visible = false;
   proxy.userData = { isLodProxy: true, actId: building.userData.actId };
   building.parent.add(proxy);
@@ -147,19 +154,34 @@ export function attachLod(building: THREE.Object3D): void {
 /**
  * Bascule détail/proxy selon la distance. À appeler à basse fréquence
  * (2×/s suffit largement : la transition passe inaperçue dans la brume).
+ *
+ * TROIS niveaux, et non deux — c'est ce qui permet de repousser loin le moment
+ * où un bâtiment devient une boîte :
+ *
+ *   0 → 70 m     le bâtiment entier, mobilier compris
+ *   70 → 300 m   le bâtiment SANS ses intérieurs (on ne les voit plus, et ils
+ *                coûtent l'essentiel des appels de dessin)
+ *   au-delà      la silhouette
+ *
+ * Avec deux niveaux seulement, repousser la frontière à 175 m faisait tomber
+ * la scène de 60 à 34 images/s : on payait le mobilier de toute la ville.
+ * En l'éteignant, on garde de vrais bâtiments quatre fois plus loin pour moins
+ * cher que l'ancien réglage.
  */
-export function updateLod(buildings: readonly THREE.Object3D[], camera: THREE.Object3D, nearDist = 130): void {
+export function updateLod(
+  buildings: readonly THREE.Object3D[],
+  camera: THREE.Object3D,
+  nearDist = 300,
+  interiorDist = 70,
+): void {
   const cam = camera.position;
-  // Deux seuils, pas un. Avec un seuil unique, un bâtiment posé pile à la
-  // frontière clignote entre détail et silhouette à chaque pas de côté ; en
-  // repassant au détail un peu plus près qu'on ne l'avait quitté, la bascule
-  // ne peut plus osciller.
-  //
-  // (Repousser la frontière à 175 m a été essayé : la bascule se cachait bien
-  //  mieux dans la brume, mais on tombait de 60 à 34 images/s sur une ville de
-  //  45 bâtiments. Ce n'est pas un échange acceptable.)
+  // Deux seuils pour la silhouette, pas un. Avec un seuil unique, un bâtiment
+  // posé pile à la frontière clignote entre détail et silhouette à chaque pas
+  // de côté ; en repassant au détail un peu plus près qu'on ne l'avait quitté,
+  // la bascule ne peut plus osciller.
   const enter2 = nearDist * nearDist;                    // on repasse au détail
   const leave2 = (nearDist * 1.12) ** 2;                 // on passe à la silhouette
+  const inside2 = interiorDist * interiorDist;
   for (const b of buildings) {
     const proxy = b.userData.lodProxy as THREE.Group | undefined;
     if (!proxy) continue;
@@ -173,5 +195,11 @@ export function updateLod(buildings: readonly THREE.Object3D[], camera: THREE.Ob
     const detailed = b.visible ? d2 < leave2 : d2 < enter2;
     b.visible = detailed;
     proxy.visible = !detailed;
+
+    const interiors = b.userData.lodInteriors as THREE.Object3D[] | undefined;
+    if (interiors?.length) {
+      const furnished = detailed && d2 < inside2;
+      for (const it of interiors) it.visible = furnished;
+    }
   }
 }
