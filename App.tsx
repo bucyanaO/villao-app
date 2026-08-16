@@ -50,7 +50,7 @@ const App: FC = () => {
   };
 
   // --- Scene / simulation state ---
-  const [lightingPreset, setLightingPreset] = useState(qNum('preset', 2)); // Start with Néon Nocturne
+  const [lightingPreset, setLightingPreset] = useState(qNum('preset', 0)); // On commence toujours de jour
   const [fogLevel, setFogLevel] = useState(qNum('fog', 1.0));
   const [architecturalStyle, setArchitecturalStyle] = useState(q.get('style') || 'residential');
   const [weather, setWeather] = useState<'clear' | 'rain' | 'snow'>('clear');
