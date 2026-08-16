@@ -214,7 +214,10 @@ export const generateCity = (ctx: CityGenCtx): number => {
            const treeR = CityAssets.Props.createHolographicTree(scale, CITY_THEME.colors.props.greenFoliage); treeR.position.set(halfWidth, 0, zPos); treeR.rotation.y = Math.random() * Math.PI; group.add(treeR);
         }
         
-        group.userData = { isBuilding: true, expanded: false }; // Mark for interaction
+        // `footprint` = la MAISON (≈14 m), pas la parcelle : sinon la silhouette
+        // lointaine engloberait le jardin, l'allée et la voiture, et l'on verrait
+        // un grand bloc posé là où il n'y a qu'un pavillon.
+        group.userData = { isBuilding: true, expanded: false, footprint: 14 }; // Mark for interaction
         occupy(x, z, 15); // cadastre: villa + jardin + allée (rien ne peut être bâti dessus)
         cityGroup.add(group); ctx.animRef.current.buildingsList.push(group);
     };
@@ -323,7 +326,7 @@ export const generateCity = (ctx: CityGenCtx): number => {
                 const bd = CityAssets.Layouts.createProceduralBuilding(11, 11, floors, styles[Math.floor(Math.random() * 3)], wc);
                 bd.group.position.set(bx, 0, bz); bd.group.rotation.y = ang + Math.PI;
                 occupy(bx, bz, 9);
-                bd.group.userData = { isBuilding: true, expanded: false };
+                bd.group.userData = { isBuilding: true, expanded: false, footprint: 12 };
                 cityGroup.add(bd.group); ctx.animRef.current.buildingsList.push(bd.group);
                 bd.animatedObjects.fans.forEach((f: any) => ctx.animRef.current.fanList.push(f));
                 bd.animatedObjects.screens.forEach((s: any) => ctx.animRef.current.screenList.push(s));
@@ -455,7 +458,7 @@ export const generateCity = (ctx: CityGenCtx): number => {
                const roofPlate = CityAssets.primitives.createWireframeObject(lastW, 0.5, lastD, 0x222222, 0.8, roofShape); roofPlate.position.y = 0.25; roofGroup.add(roofPlate);
                const details = CityAssets.Architecture.createRooftopDetail(lastW, lastD, roofShape); details.position.y = 0.5; roofGroup.add(details);
                building.add(roofGroup); 
-               cityGroup.add(building); ctx.animRef.current.buildingsList.push(building); building.userData = { isBuilding: true, expanded: false };
+               cityGroup.add(building); ctx.animRef.current.buildingsList.push(building); building.userData = { isBuilding: true, expanded: false, footprint: Math.max(width, depth) };
                animatedObjects.fans.forEach(f => ctx.animRef.current.fanList.push(f)); animatedObjects.screens.forEach(s => ctx.animRef.current.screenList.push(s));
 
                const swM = new THREE.Matrix4(); swM.setPosition(bx, 0.1, bz); sidewalkMerger.addBox(swM, 16, 0.2, 16);

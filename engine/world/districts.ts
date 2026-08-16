@@ -299,7 +299,10 @@ export function buildDistrict(args: BuildDistrictArgs): DistrictResult {
     const form = makeSlot(slot.kind, makeRng(plan.seed + slot.x * 131 + slot.z * 17), slot.level);
     form.group.position.set(slot.x, 0, slot.z);
     form.group.rotation.y = angle + (slot.face === 1 ? Math.PI : 0);
-    form.group.userData = { ...form.group.userData, isBuilding: true, expanded: false, district: theme, actId };
+    // `footprint` : l'emprise que le cadastre a réservée pour ce lot. Sans
+    // elle, la silhouette du bâtiment se cale sur sa boîte englobante — donc
+    // sur ses enseignes et ses auvents — et déborde sur la maison voisine.
+    form.group.userData = { ...form.group.userData, isBuilding: true, expanded: false, district: theme, actId, footprint: slot.footprint };
     group.add(form.group);
     animRef.current.buildingsList.push(form.group as THREE.Group);
     form.inhabitants.forEach((inh) => { inh.userData.actId = actId; animRef.current.inhabitantsList.push(inh); });
