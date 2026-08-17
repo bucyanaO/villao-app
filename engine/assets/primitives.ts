@@ -6,10 +6,15 @@ import * as THREE from 'three';
 import { CITY_THEME } from '../theme';
 import { sharedMaterials, getMaterial, getCachedGeometry } from './materials';
 
-export const createWireframeObject = (width: number, height: number, depth: number, color: number, opacity: number = 0.1, shape: 'box' | 'icosahedron' | 'cylinder' | 'cone' | 'plane' | 'circle' = 'box'): THREE.Group => {
+/**
+ * `edgeColor` : couleur des arêtes, quand elle doit différer du remplissage.
+ * Un volume blanc cerclé de blanc n'a plus ni structure ni relief — il se lit
+ * comme un bloc plein, hors du style de la ville.
+ */
+export const createWireframeObject = (width: number, height: number, depth: number, color: number, opacity: number = 0.1, shape: 'box' | 'icosahedron' | 'cylinder' | 'cone' | 'plane' | 'circle' = 'box', edgeColor?: number): THREE.Group => {
     const group = new THREE.Group();
     const edgesGeo = getCachedGeometry(width, height, depth, 'edges');
-    const lineMaterial = getMaterial(color, true);
+    const lineMaterial = getMaterial(edgeColor ?? color, true);
     group.add(new THREE.LineSegments(edgesGeo, lineMaterial));
     const fillGeo = getCachedGeometry(width, height, depth, shape);
     let fillMaterial;

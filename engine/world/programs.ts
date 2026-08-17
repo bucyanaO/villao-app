@@ -119,9 +119,25 @@ function litWindows(width: number, y: number, z: number, count: number, rng: Rng
   return im;
 }
 
+/**
+ * Arête lisible pour une façade claire.
+ *
+ * Les arêtes reprennent la couleur du mur. Sur un blanc d'hôpital ou un beige
+ * de mairie, elles disparaissent : le volume perd sa structure et se lit comme
+ * un bloc plein, hors du style de la ville. Au-delà d'un certain éclat, on les
+ * assombrit donc.
+ */
+const edgeFor = (color: number): number => {
+  const r = (color >> 16) & 255, g2 = (color >> 8) & 255, b = color & 255;
+  const lum = (0.299 * r + 0.587 * g2 + 0.114 * b) / 255;
+  if (lum < 0.72) return color;
+  const k = 0.5;
+  return (Math.round(r * k) << 16) | (Math.round(g2 * k) << 8) | Math.round(b * k);
+};
+
 /** Volume filaire standard (mêmes codes visuels que le reste de la ville). */
 const box = (w: number, h: number, d: number, color: number, opacity = 0.5) =>
-  CityAssets.primitives.createWireframeObject(w, h, d, color, opacity, 'box');
+  CityAssets.primitives.createWireframeObject(w, h, d, color, opacity, 'box', edgeFor(color));
 
 // --- Fabriques ---------------------------------------------------------------
 
@@ -444,10 +460,14 @@ function equipement(kind: 'ecole' | 'clinique' | 'mairie', rng: Rng, level: numb
   const floors = kind === 'mairie' ? 2 : rng.int(1, 2) + (level >= 4 ? 1 : 0);
   const fh = 3.8;
   const wall = kind === 'clinique' ? 0xf2f5f7 : kind === 'ecole' ? 0xe8d8b0 : 0xd9d2c5;
+  const trim = edgeFor(wall);
 
   for (let i = 0; i < floors; i++) {
-    const body = box(w, fh, d, wall, 0.6);
+    const body = box(w, fh, d, wall, 0.4);
     body.position.y = i * fh + fh / 2; g.add(body);
+    // le plancher de chaque niveau : c'est lui qui donne à voir l'intérieur
+    const slab = CityAssets.primitives.createSolidObject(w - 0.8, 0.16, d - 0.8, getMaterial(trim, false), 'box');
+    slab.position.y = i * fh + 0.08; g.add(slab);
   }
   for (let i = 0; i < floors; i++) {
     g.add(litWindows(w - 3, i * fh + fh * 0.55, d / 2 + 0.06, 4, rng));
@@ -456,7 +476,7 @@ function equipement(kind: 'ecole' | 'clinique' | 'mairie', rng: Rng, level: numb
   // portique d'entrée à colonnes : ça se lit tout de suite comme un équipement
   const cols = 4;
   for (let i = 0; i < cols; i++) {
-    const c = CityAssets.primitives.createWireframeObject(0.7, floors * fh - 0.4, 0.7, wall, 0.9, 'cylinder');
+    const c = CityAssets.primitives.createWireframeObject(0.7, floors * fh - 0.4, 0.7, wall, 0.9, 'cylinder', trim);
     c.position.set(-w / 4 + (i * w) / (2 * (cols - 1)) * 2 - w / 8, (floors * fh - 0.4) / 2, d / 2 + 1.6);
     g.add(c);
   }
